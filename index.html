@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TooYenKung - Fridge Inventory</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Mobile-friendly resets */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        
+        /* Hide scrollbar for category chips but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Touch target minimum sizes */
+        button, .chip {
+            min-height: 44px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans pb-24">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-blue-600"><i class="fa-solid fa-snowflake mr-2"></i>TooYenKung</h1>
+            <button id="refreshBtn" class="text-gray-500 hover:text-blue-600 w-11 h-11 flex justify-center items-center rounded-full">
+                <i class="fa-solid fa-rotate-right text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content: Inventory List -->
+    <main class="p-4" id="inventoryList">
+        <!-- Loading State -->
+        <div id="loadingIndicator" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-4 text-blue-500"></i>
+            <p>Loading your fridge items...</p>
+        </div>
+        
+        <!-- Items will be injected here by app.js -->
+        <div id="itemsContainer" class="space-y-3 hidden"></div>
+        
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-12 text-gray-400 text-center">
+            <i class="fa-solid fa-basket-shopping text-4xl mb-4 text-gray-300"></i>
+            <p class="text-lg font-medium text-gray-600">Fridge is empty!</p>
+            <p class="text-sm mt-1">Tap the + button to add items.</p>
+        </div>
+    </main>
+
+    <!-- Floating Add Button -->
+    <button id="openAddModalBtn" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex justify-center items-center text-2xl hover:bg-blue-700 transition-colors z-20">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- Add/Edit Item Modal -->
+    <div id="itemModal" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden flex flex-col justify-end">
+        <div class="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto transform transition-transform shadow-2xl pb-6">
+            <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                <h2 id="modalTitle" class="text-xl font-bold">Add to Fridge</h2>
+                <button id="closeModalBtn" class="w-11 h-11 flex justify-center items-center text-gray-500 bg-gray-100 rounded-full">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="itemForm" class="p-4 space-y-5">
+                <input type="hidden" id="itemId">
+                
+                <!-- Name -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Item Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="itemName" required placeholder="e.g., หมูสันนอก" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+                </div>
+                
+                <!-- Category -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                    <div class="flex overflow-x-auto no-scrollbar space-x-2 pb-1" id="categoryContainer">
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="เนื้อสัตว์">เนื้อสัตว์</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="ผัก/ผลไม้">ผัก/ผลไม้</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="ไข่/นม">ไข่/นม</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="เครื่องปรุง">เครื่องปรุง</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="อาหารสำเร็จ">อาหารสำเร็จ</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="อื่นๆ">อื่นๆ</button>
+                    </div>
+                    <input type="hidden" id="itemCategory" value="">
+                </div>
+                
+                <!-- Quantity & Unit -->
+                <div class="flex space-x-3">
+                    <div class="flex-1">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Qty</label>
+                        <input type="number" id="itemQty" step="0.1" value="1" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-center">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Unit</label>
+                        <select id="itemUnit" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg bg-white">
+                            <option value="ชิ้น">ชิ้น</option>
+                            <option value="กล่อง">กล่อง</option>
+                            <option value="ขวด">ขวด</option>
+                            <option value="กรัม">กรัม</option>
+                            <option value="กก.">กก.</option>
+                            <option value="แพ็ค">แพ็ค</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Expiry Date -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Expiry Date <span class="text-red-500">*</span></label>
+                    <input type="date" id="itemExpiry" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg mb-2">
+                    
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        <button type="button" class="expiry-preset px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" data-days="3">+3 วัน</button>
+                        <button type="button" class="expiry-preset px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" data-days="7">+7 วัน</button>
+                        <button type="button" class="expiry-preset px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" data-days="14">+14 วัน</button>
+                        <button type="button" class="expiry-preset px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" data-days="30">+1 เดือน</button>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" id="saveItemBtn" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg mt-4 shadow-md flex justify-center items-center">
+                    <span>Save to Fridge</span>
+                    <i class="fa-solid fa-spinner fa-spin hidden ml-2" id="saveSpinner"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50 text-sm font-medium">
+        Message goes here
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
