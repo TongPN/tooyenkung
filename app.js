@@ -146,9 +146,14 @@ function renderItems() {
 async function markDepleted(id) {
     if (!confirm("Confirm mark as depleted?")) return;
     
-    // Optimistic UI update
+    // Optimistic UI update (hide immediately)
     const itemCard = document.querySelector(`button[onclick="markDepleted('${id}')"]`).closest('.bg-white');
-    itemCard.style.opacity = '0.5';
+    if (itemCard) itemCard.style.display = 'none';
+    
+    // Backup and remove from local array
+    const backupItem = inventory.find(i => i.ID === id);
+    inventory = inventory.filter(i => i.ID !== id);
+    renderItems(); // Re-render instantly
     
     try {
         const result = await apiRequest({
@@ -158,8 +163,6 @@ async function markDepleted(id) {
         });
         
         if (result.success) {
-            inventory = inventory.filter(i => i.ID !== id);
-            renderItems();
             showToast("Item removed.");
         } else {
             throw new Error(result.message);
@@ -167,7 +170,12 @@ async function markDepleted(id) {
     } catch (error) {
         console.error("Error depleting item:", error);
         showToast("Failed to remove item.");
-        itemCard.style.opacity = '1';
+        // Restore on failure
+        if (backupItem) {
+            inventory.push(backupItem);
+            inventory.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
+            renderItems();
+        }
     }
 }
 
@@ -251,16 +259,35 @@ function setupEventListeners() {
         };
         
         try {
+            // Helper to calc days left
+            const calcDays = (dateStr) => {
+                const now = new Date();
+                now.setHours(0,0,0,0);
+                return Math.ceil((new Date(dateStr) - now) / (1000 * 60 * 60 * 24));
+            };
+
             if (isUpdate) {
                 await apiRequest({ action: 'update', id: inputId.value, updates: formData });
+                // Update local array
+                const index = inventory.findIndex(i => i.ID === inputId.value);
+                if (index !== -1) {
+                    inventory[index] = { ...inventory[index], ...formData, daysLeft: calcDays(formData.Expiry_Date) };
+                }
             } else {
                 formData.Status = 'Active';
-                await apiRequest({ action: 'add', item: formData });
+                const result = await apiRequest({ action: 'add', item: formData });
+                if (result.success) {
+                    formData.ID = result.id || 'ITEM-' + Date.now();
+                    formData.daysLeft = calcDays(formData.Expiry_Date);
+                    inventory.push(formData);
+                }
             }
             
+            // Re-sort locally and re-render without fetching
+            inventory.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
             showToast(isUpdate ? "Item updated!" : "Item added!");
             itemModal.classList.add('hidden');
-            fetchItems();
+            renderItems(); // Instant update
         } catch (error) {
             console.error("Error saving:", error);
             showToast("Failed to save item.");
