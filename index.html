@@ -132,7 +132,7 @@
                 <div class="flex space-x-3">
                     <div class="flex-1">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Qty</label>
-                        <input type="number" id="itemQty" step="0.1" value="1" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-center">
+                        <input type="number" id="itemQty" step="any" min="0.1" value="1" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-center">
                     </div>
                     <div class="flex-1">
                         <div class="flex justify-between items-center mb-1">
@@ -215,6 +215,64 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Consume / Custom Amount Modal -->
+    <div id="consumeModal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden flex flex-col justify-end">
+        <div class="bg-white rounded-t-2xl w-full max-h-[85vh] overflow-y-auto transform transition-transform shadow-2xl pb-6">
+            <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-800" id="consumeItemTitle">บันทึกการหยิบใช้</h2>
+                    <p class="text-xs text-gray-500" id="consumeCurrentStockText">คงเหลือปัจจุบัน: -</p>
+                </div>
+                <button id="closeConsumeModalBtn" class="w-10 h-10 flex justify-center items-center text-gray-500 bg-gray-100 rounded-full">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="consumeForm" class="p-4 space-y-4">
+                <input type="hidden" id="consumeItemId">
+
+                <!-- Amount to use input -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                        จำนวนที่หยิบใช้ (<span id="consumeUnitLabel">หน่วย</span>)
+                    </label>
+                    <div class="relative">
+                        <input type="number" id="consumeAmountInput" step="any" min="0.01" required placeholder="0" class="w-full text-center text-3xl font-black py-3 border-2 border-blue-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 text-blue-900">
+                        <span id="consumeUnitSuffix" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">หน่วย</span>
+                    </div>
+                </div>
+
+                <!-- Quick Presets Container -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">ปุ่มลัดเลือกปริมาณ (Presets)</label>
+                    <div id="consumePresetsContainer" class="flex flex-wrap gap-2">
+                        <!-- Injected dynamically based on unit (e.g. 50g, 100g, 200g, 50%, all) -->
+                    </div>
+                </div>
+
+                <!-- Preview Remaining -->
+                <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center text-xs">
+                    <span class="text-gray-500">หลังใช้จะเหลือในตู้:</span>
+                    <span id="consumePreviewRemaining" class="font-bold text-gray-800 text-sm">-</span>
+                </div>
+
+                <!-- Optional Note -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">
+                        บันทึกการนำไปทำอาหาร (ไม่บังคับ)
+                    </label>
+                    <input type="text" id="consumeNoteInput" placeholder="เช่น ทำกะเพรา, แกงจืด, อบไก่" class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="confirmConsumeBtn" class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-base shadow-md active:bg-blue-700 flex justify-center items-center">
+                    <i class="fa-solid fa-utensils mr-2"></i>
+                    <span>บันทึกการหยิบใช้</span>
+                </button>
+            </form>
         </div>
     </div>
 

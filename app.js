@@ -22,10 +22,18 @@ db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
 // --- Security / Family PIN ---
 const FAMILY_PIN = "1234"; // Default Family PIN
 
+// --- Discrete Units Definition ---
+const DISCRETE_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'ห่อ', 'จาน', 'มัด', 'ลูก', 'หัว', 'กระป๋อง'];
+
+function isDiscreteUnit(unit) {
+    return DISCRETE_UNITS.includes(unit);
+}
+
 // --- State ---
 let inventory = [];
-const DEFAULT_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'กรัม', 'กก.', 'จาน', 'ห่อ'];
+const DEFAULT_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'กรัม', 'กก.', 'จาน', 'ห่อ', 'มล.'];
 let units = [...DEFAULT_UNITS];
+let currentConsumeItem = null;
 
 // --- DOM Elements ---
 const pinLockScreen = document.getElementById('pinLockScreen');
@@ -72,6 +80,20 @@ const historyInitialQty = document.getElementById('historyInitialQty');
 const historyUsedQty = document.getElementById('historyUsedQty');
 const historyRemainingQty = document.getElementById('historyRemainingQty');
 const historyTimeline = document.getElementById('historyTimeline');
+
+// Consume Modal Elements
+const consumeModal = document.getElementById('consumeModal');
+const closeConsumeModalBtn = document.getElementById('closeConsumeModalBtn');
+const consumeForm = document.getElementById('consumeForm');
+const consumeItemId = document.getElementById('consumeItemId');
+const consumeItemTitle = document.getElementById('consumeItemTitle');
+const consumeCurrentStockText = document.getElementById('consumeCurrentStockText');
+const consumeUnitLabel = document.getElementById('consumeUnitLabel');
+const consumeUnitSuffix = document.getElementById('consumeUnitSuffix');
+const consumeAmountInput = document.getElementById('consumeAmountInput');
+const consumePresetsContainer = document.getElementById('consumePresetsContainer');
+const consumePreviewRemaining = document.getElementById('consumePreviewRemaining');
+const consumeNoteInput = document.getElementById('consumeNoteInput');
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -325,6 +347,34 @@ function renderItems() {
         }
         
         const usedCount = item.usedCount || 0;
+        const isDiscrete = isDiscreteUnit(item.Unit);
+        
+        // Smart Action Buttons based on unit type
+        let actionButtonsHtml = '';
+        if (isDiscrete) {
+            // Discrete item (e.g. 1 ถุง, 1 ฟอง, 1 ชิ้น): Can -1 directly OR tap to enter custom amount
+            actionButtonsHtml = `
+                <button onclick="openHistoryModal('${item.ID}')" class="px-2.5 py-2.5 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs font-bold shadow-sm active:bg-gray-100" title="ดูประวัติ">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button onclick="openConsumeModal('${item.ID}')" class="px-3 py-2.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-xl text-xs font-bold active:bg-blue-100" title="ระบุจำนวนที่ใช้">
+                    ระบุจำนวน
+                </button>
+                <button onclick="quickConsumeOne('${item.ID}')" class="px-3.5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center active:bg-blue-700" title="หยิบใช้ 1 ${item.Unit}">
+                    <i class="fa-solid fa-minus mr-1 text-[10px]"></i>1 ${item.Unit}
+                </button>
+            `;
+        } else {
+            // Continuous item (e.g. กรัม, กก., มล.): Tap to enter grams/amount directly with smart presets
+            actionButtonsHtml = `
+                <button onclick="openHistoryModal('${item.ID}')" class="px-2.5 py-2.5 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs font-bold shadow-sm active:bg-gray-100" title="ดูประวัติ">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button onclick="openConsumeModal('${item.ID}')" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center active:bg-blue-700" title="หยิบใช้">
+                    <i class="fa-solid fa-utensils mr-1.5 text-xs"></i>หยิบใช้ (${item.Unit})
+                </button>
+            `;
+        }
         
         const card = document.createElement('div');
         card.className = `bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col`;
@@ -353,13 +403,8 @@ function renderItems() {
                     ${usedCount > 0 ? `<div class="text-[11px] text-orange-600 font-medium mt-0.5">ใช้ไปแล้ว: ${usedCount} ${item.Unit}</div>` : ''}
                 </div>
                 
-                <div class="flex items-center space-x-2">
-                    <button onclick="openHistoryModal('${item.ID}')" class="px-3 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold shadow-sm flex items-center active:bg-gray-100" title="ดูประวัติการหยิบใช้">
-                        <i class="fa-solid fa-clock-rotate-left mr-1.5 text-blue-500"></i>ประวัติ
-                    </button>
-                    <button onclick="consumeItem('${item.ID}', 1)" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center active:bg-blue-700" title="หยิบใช้ 1 ${item.Unit}">
-                        <i class="fa-solid fa-minus mr-1 text-[11px]"></i>ใช้ 1 ${item.Unit}
-                    </button>
+                <div class="flex items-center space-x-1.5">
+                    ${actionButtonsHtml}
                 </div>
             </div>
             
@@ -377,27 +422,129 @@ function renderItems() {
     });
 }
 
-// --- Consumption & History Logic ---
+// --- Consumption Logic (Discrete & Grams/Continuous) ---
 
-async function consumeItem(id, amount = 1) {
+// 1. Quick consume 1 unit (for discrete units like egg, bag, piece)
+function quickConsumeOne(id) {
+    const item = inventory.find(i => i.ID === id);
+    if (!item) return;
+    executeConsumption(item, 1, `หยิบใช้ 1 ${item.Unit}`);
+}
+
+// 2. Open smart consume modal with contextual presets
+function openConsumeModal(id) {
     const item = inventory.find(i => i.ID === id);
     if (!item) return;
 
-    const currentQty = parseFloat(item.Remaining_Qty) || 0;
-    const newQty = Math.round((currentQty - amount) * 10) / 10;
-    const currentUsed = parseFloat(item.usedCount) || 0;
-    const newUsed = Math.round((currentUsed + amount) * 10) / 10;
+    currentConsumeItem = item;
+    consumeItemId.value = item.ID;
+    consumeItemTitle.textContent = `หยิบใช้: ${item.Item_Name}`;
+    consumeCurrentStockText.textContent = `คงเหลือปัจจุบัน: ${item.Remaining_Qty} ${item.Unit}`;
+    consumeUnitLabel.textContent = item.Unit;
+    consumeUnitSuffix.textContent = item.Unit;
+    consumeAmountInput.value = '';
+    consumeNoteInput.value = '';
+    updateConsumePreview(0);
+
+    // Generate contextual presets based on unit
+    renderConsumePresets(item);
+
+    consumeModal.classList.remove('hidden');
+    setTimeout(() => consumeAmountInput.focus(), 150);
+}
+
+function renderConsumePresets(item) {
+    consumePresetsContainer.innerHTML = '';
+    const unit = item.Unit;
+    const remaining = parseFloat(item.Remaining_Qty) || 0;
     
-    if (newQty <= 0) {
-        if (confirm(`คุณหยิบใช้ "${item.Item_Name}" จนหมดแล้วใช่หรือไม่?\nต้องการตัดออกจากตู้เย็นเลยไหม?`)) {
-            markDepleted(id);
-            return;
-        } else {
-            return;
-        }
+    let presets = [];
+    if (unit === 'กรัม') {
+        presets = [50, 100, 150, 200, 250, 300, 500].filter(val => val < remaining);
+    } else if (unit === 'กก.') {
+        presets = [0.1, 0.2, 0.3, 0.5].filter(val => val < remaining);
+    } else if (unit === 'มล.') {
+        presets = [50, 100, 200, 250, 500].filter(val => val < remaining);
+    } else {
+        // Discrete (ชิ้น, ถุง, ฟอง, ฯลฯ)
+        presets = [1, 2, 3, 4, 5].filter(val => val < remaining);
     }
 
-    // History log entry
+    // Add numeric presets
+    presets.forEach(p => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-3 py-1.5 bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-700 font-bold rounded-xl text-xs active:bg-blue-200 transition-colors';
+        btn.textContent = `${p} ${unit}`;
+        btn.onclick = () => {
+            consumeAmountInput.value = p;
+            updateConsumePreview(p);
+        };
+        consumePresetsContainer.appendChild(btn);
+    });
+
+    // Preset: 50% (ครึ่งหนึ่ง)
+    if (remaining > 1) {
+        const half = Math.round((remaining / 2) * 10) / 10;
+        const halfBtn = document.createElement('button');
+        halfBtn.type = 'button';
+        halfBtn.className = 'px-3 py-1.5 bg-blue-50 text-blue-700 font-bold rounded-xl text-xs active:bg-blue-200 transition-colors';
+        halfBtn.textContent = `ครึ่งหนึ่ง (${half} ${unit})`;
+        halfBtn.onclick = () => {
+            consumeAmountInput.value = half;
+            updateConsumePreview(half);
+        };
+        consumePresetsContainer.appendChild(halfBtn);
+    }
+
+    // Preset: All (ใช้หมดเลย)
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'px-3 py-1.5 bg-orange-50 text-orange-700 font-bold rounded-xl text-xs active:bg-orange-200 transition-colors';
+    allBtn.textContent = `ทั้งหมด (${remaining} ${unit})`;
+    allBtn.onclick = () => {
+        consumeAmountInput.value = remaining;
+        updateConsumePreview(remaining);
+    };
+    consumePresetsContainer.appendChild(allBtn);
+}
+
+function updateConsumePreview(enteredAmount) {
+    if (!currentConsumeItem) return;
+    const remaining = parseFloat(currentConsumeItem.Remaining_Qty) || 0;
+    const amount = parseFloat(enteredAmount) || 0;
+    const after = Math.round((remaining - amount) * 100) / 100;
+    
+    if (amount <= 0) {
+        consumePreviewRemaining.textContent = `${remaining} ${currentConsumeItem.Unit}`;
+        consumePreviewRemaining.className = 'font-bold text-gray-800 text-sm';
+    } else if (after < 0) {
+        consumePreviewRemaining.textContent = `เกินสต็อกคงเหลือ! (ขาด ${Math.abs(after)} ${currentConsumeItem.Unit})`;
+        consumePreviewRemaining.className = 'font-bold text-red-500 text-sm';
+    } else if (after === 0) {
+        consumePreviewRemaining.textContent = `0 ${currentConsumeItem.Unit} (ใช้หมดพอดี)`;
+        consumePreviewRemaining.className = 'font-bold text-orange-600 text-sm';
+    } else {
+        consumePreviewRemaining.textContent = `${after} ${currentConsumeItem.Unit}`;
+        consumePreviewRemaining.className = 'font-bold text-blue-700 text-sm';
+    }
+}
+
+// 3. Execute consumption update to Firestore
+async function executeConsumption(item, amount, noteText) {
+    const currentQty = parseFloat(item.Remaining_Qty) || 0;
+    const newQty = Math.round((currentQty - amount) * 100) / 100;
+    const currentUsed = parseFloat(item.usedCount) || 0;
+    const newUsed = Math.round((currentUsed + amount) * 100) / 100;
+    
+    if (newQty <= 0) {
+        if (!confirm(`คุณหยิบใช้ "${item.Item_Name}" จนหมดตู้แล้วใช่หรือไม่?\nต้องการตัดออกจากตู้เย็นเลยไหม?`)) {
+            return;
+        }
+        markDepleted(item.ID);
+        return;
+    }
+
     const now = new Date();
     const historyEntry = {
         date: now.toISOString(),
@@ -405,7 +552,7 @@ async function consumeItem(id, amount = 1) {
         action: 'consume',
         amount: amount,
         remaining: newQty,
-        note: `หยิบใช้ ${amount} ${item.Unit} (คงเหลือ ${newQty} ${item.Unit})`
+        note: noteText || `หยิบใช้ ${amount} ${item.Unit} (คงเหลือ ${newQty} ${item.Unit})`
     };
 
     // Optimistic UI update
@@ -414,10 +561,10 @@ async function consumeItem(id, amount = 1) {
     if (!item.history) item.history = [];
     item.history.push(historyEntry);
     renderItems();
-    showToast(`ใช้ "${item.Item_Name}" 1 ${item.Unit} แล้ว`);
+    showToast(`ใช้ "${item.Item_Name}" ${amount} ${item.Unit} แล้ว`);
 
     try {
-        await db.collection('inventory').doc(id).update({
+        await db.collection('inventory').doc(item.ID).update({
             Remaining_Qty: newQty,
             usedCount: newUsed,
             history: firebase.firestore.FieldValue.arrayUnion(historyEntry),
@@ -428,6 +575,8 @@ async function consumeItem(id, amount = 1) {
         showToast("บันทึกข้อมูลไม่สำเร็จ");
     }
 }
+
+// --- History Modal ---
 
 function openHistoryModal(id) {
     const item = inventory.find(i => i.ID === id);
@@ -559,6 +708,43 @@ function setupEventListeners() {
 
     closeHistoryModalBtn.addEventListener('click', () => {
         historyModal.classList.add('hidden');
+    });
+
+    closeConsumeModalBtn.addEventListener('click', () => {
+        consumeModal.classList.add('hidden');
+        currentConsumeItem = null;
+    });
+
+    // Live preview when typing amount to use
+    consumeAmountInput.addEventListener('input', () => {
+        updateConsumePreview(consumeAmountInput.value);
+    });
+
+    // Consume form submit
+    consumeForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!currentConsumeItem) return;
+
+        const amount = parseFloat(consumeAmountInput.value);
+        if (isNaN(amount) || amount <= 0) {
+            showToast("กรุณากรอกจำนวนที่ใช้ให้ถูกต้อง");
+            return;
+        }
+
+        const remaining = parseFloat(currentConsumeItem.Remaining_Qty) || 0;
+        if (amount > remaining) {
+            showToast(`จำนวนเกินสต็อกคงเหลือ (${remaining} ${currentConsumeItem.Unit})`);
+            return;
+        }
+
+        const note = consumeNoteInput.value.trim();
+        const noteText = note 
+            ? `หยิบใช้ ${amount} ${currentConsumeItem.Unit} (${note})` 
+            : `หยิบใช้ ${amount} ${currentConsumeItem.Unit}`;
+
+        consumeModal.classList.add('hidden');
+        executeConsumption(currentConsumeItem, amount, noteText);
+        currentConsumeItem = null;
     });
     
     // Unit modal triggers
