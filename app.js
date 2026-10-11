@@ -2,6 +2,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxMKeFeshxXhEspKNfZHBCc
 
 // --- State ---
 let inventory = [];
+const DEFAULT_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'กรัม', 'กก.', 'จาน', 'ห่อ'];
 
 // --- DOM Elements ---
 const refreshBtn = document.getElementById('refreshBtn');
@@ -25,14 +26,152 @@ const inputQty = document.getElementById('itemQty');
 const inputUnit = document.getElementById('itemUnit');
 const inputExpiry = document.getElementById('itemExpiry');
 
+// Units Modal Elements
+const unitsModal = document.getElementById('unitsModal');
+const manageUnitsBtn = document.getElementById('manageUnitsBtn');
+const closeUnitsModalBtn = document.getElementById('closeUnitsModalBtn');
+const newUnitInput = document.getElementById('newUnitInput');
+const addNewUnitBtn = document.getElementById('addNewUnitBtn');
+const unitsListContainer = document.getElementById('unitsListContainer');
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+    populateUnitSelect();
     fetchItems();
     setupEventListeners();
     
     // Set default date to today for presets logic
     inputExpiry.value = getFormattedDate(new Date());
 });
+
+// --- Unit Management ---
+
+function getUnits() {
+    try {
+        const saved = localStorage.getItem('tooyenkung_units');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (e) {
+        console.error("Error reading units:", e);
+    }
+    return [...DEFAULT_UNITS];
+}
+
+function saveUnits(unitsList) {
+    localStorage.setItem('tooyenkung_units', JSON.stringify(unitsList));
+}
+
+function populateUnitSelect(selectedVal) {
+    const units = getUnits();
+    inputUnit.innerHTML = '';
+    
+    // If selectedVal is provided and not in the list, keep it
+    if (selectedVal && !units.includes(selectedVal)) {
+        units.push(selectedVal);
+        saveUnits(units);
+    }
+    
+    units.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u;
+        opt.textContent = u;
+        if (u === selectedVal) opt.selected = true;
+        inputUnit.appendChild(opt);
+    });
+    
+    // Add custom trigger option
+    const addOpt = document.createElement('option');
+    addOpt.value = '__ADD_NEW__';
+    addOpt.textContent = '+ เพิ่มหน่วยใหม่...';
+    inputUnit.appendChild(addOpt);
+    
+    if (!selectedVal && units.length > 0) {
+        inputUnit.value = units[0];
+    }
+}
+
+function openUnitsModal() {
+    renderUnitsList();
+    newUnitInput.value = '';
+    unitsModal.classList.remove('hidden');
+    setTimeout(() => newUnitInput.focus(), 150);
+}
+
+function renderUnitsList() {
+    const units = getUnits();
+    unitsListContainer.innerHTML = '';
+    
+    if (units.length === 0) {
+        unitsListContainer.innerHTML = '<p class="text-gray-400 text-sm py-2">ไม่มีหน่วยนับ</p>';
+        return;
+    }
+    
+    units.forEach((u) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between items-center bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100';
+        row.innerHTML = `
+            <span class="font-medium text-gray-800">${u}</span>
+            <div class="flex items-center space-x-2">
+                <button type="button" onclick="editUnitName('${u}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-blue-600 bg-blue-50 active:bg-blue-100" title="แก้ไขชื่อ">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button type="button" onclick="deleteUnitName('${u}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-red-600 bg-red-50 active:bg-red-100" title="ลบหน่วยนี้">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </div>
+        `;
+        unitsListContainer.appendChild(row);
+    });
+}
+
+function addNewUnit() {
+    const name = newUnitInput.value.trim();
+    if (!name) return;
+    
+    const units = getUnits();
+    if (units.includes(name)) {
+        showToast("หน่วยนี้มีอยู่แล้ว");
+        return;
+    }
+    
+    units.push(name);
+    saveUnits(units);
+    newUnitInput.value = '';
+    renderUnitsList();
+    populateUnitSelect(name);
+    showToast(`เพิ่มหน่วย "${name}" เรียบร้อย`);
+}
+
+function editUnitName(oldName) {
+    const newName = prompt(`แก้ไขชื่อหน่วย "${oldName}" เป็น:`, oldName);
+    if (!newName || !newName.trim() || newName.trim() === oldName) return;
+    
+    const trimmed = newName.trim();
+    let units = getUnits();
+    if (units.includes(trimmed)) {
+        showToast("มีหน่วยนี้อยู่แล้ว");
+        return;
+    }
+    
+    units = units.map(u => u === oldName ? trimmed : u);
+    saveUnits(units);
+    renderUnitsList();
+    populateUnitSelect(trimmed);
+    showToast(`เปลี่ยนชื่อหน่วยเป็น "${trimmed}" แล้ว`);
+}
+
+function deleteUnitName(name) {
+    if (!confirm(`ต้องการลบหน่วย "${name}" ใช่หรือไม่?`)) return;
+    
+    let units = getUnits();
+    units = units.filter(u => u !== name);
+    saveUnits(units);
+    renderUnitsList();
+    populateUnitSelect();
+    showToast(`ลบหน่วย "${name}" แล้ว`);
+}
 
 // --- API Calls ---
 
@@ -120,7 +259,7 @@ function renderItems() {
             <div class="flex justify-between items-start mb-2">
                 <div>
                     <h3 class="font-bold text-lg text-gray-800">${item.Item_Name}</h3>
-                    <p class="text-sm text-gray-500">${item.Category || 'No Category'} &bull; ${item.Remaining_Qty} ${item.Unit}</p>
+                    <p class="text-sm text-gray-500">${item.Category || 'No Category'}</p>
                 </div>
                 <div class="${colorClass} px-3 py-1 rounded-full text-xs font-bold border flex items-center shadow-sm">
                     <i class="fa-solid ${icon} mr-1.5"></i>
@@ -128,7 +267,23 @@ function renderItems() {
                 </div>
             </div>
             
-            <div class="flex justify-between mt-3 pt-3 border-t border-gray-100">
+            <!-- Quick Quantity Adjustment Stepper -->
+            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-xl my-2 border border-gray-100">
+                <span class="text-xs font-semibold text-gray-500">คงเหลือในตู้:</span>
+                <div class="flex items-center space-x-2">
+                    <button onclick="adjustQty('${item.ID}', -1)" class="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 text-gray-700 flex items-center justify-center font-bold active:bg-gray-200 text-sm" title="ลด 1 ${item.Unit}">
+                        <i class="fa-solid fa-minus text-xs"></i>
+                    </button>
+                    <span class="font-bold text-base text-gray-800 min-w-[3.5rem] text-center">
+                        ${item.Remaining_Qty} <span class="text-xs font-normal text-gray-500">${item.Unit}</span>
+                    </span>
+                    <button onclick="adjustQty('${item.ID}', 1)" class="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 text-gray-700 flex items-center justify-center font-bold active:bg-gray-200 text-sm" title="เพิ่ม 1 ${item.Unit}">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex justify-between mt-2 pt-2 border-t border-gray-100">
                 <button onclick="editItem('${item.ID}')" class="text-blue-600 font-medium py-2 px-4 bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100">
                     <i class="fa-solid fa-pen-to-square mr-2"></i> Edit
                 </button>
@@ -141,13 +296,48 @@ function renderItems() {
     });
 }
 
+// --- Quick Quantity Adjustment ---
+
+async function adjustQty(id, delta) {
+    const item = inventory.find(i => i.ID === id);
+    if (!item) return;
+
+    const currentQty = parseFloat(item.Remaining_Qty) || 0;
+    const newQty = Math.round((currentQty + delta) * 10) / 10;
+    
+    if (newQty <= 0) {
+        if (confirm(`คุณใช้ "${item.Item_Name}" จนหมดแล้วใช่หรือไม่?\nต้องการนำออกจากตู้เย็นเลยไหม?`)) {
+            markDepleted(id);
+            return;
+        } else {
+            return;
+        }
+    }
+
+    // Optimistic UI update
+    item.Remaining_Qty = newQty;
+    renderItems();
+    showToast(`ปรับ "${item.Item_Name}" เหลือ ${newQty} ${item.Unit}`);
+
+    try {
+        await apiRequest({
+            action: 'update',
+            id: id,
+            updates: { Remaining_Qty: newQty }
+        });
+    } catch (err) {
+        console.error("Failed to update qty:", err);
+        showToast("บันทึกจำนวนไม่สำเร็จ");
+    }
+}
+
 // --- Interactions ---
 
 async function markDepleted(id) {
     if (!confirm("Confirm mark as depleted?")) return;
     
     // Optimistic UI update (hide immediately)
-    const itemCard = document.querySelector(`button[onclick="markDepleted('${id}')"]`).closest('.bg-white');
+    const itemCard = document.querySelector(`button[onclick="markDepleted('${id}')"]`)?.closest('.bg-white');
     if (itemCard) itemCard.style.display = 'none';
     
     // Backup and remove from local array
@@ -187,7 +377,9 @@ function editItem(id) {
     inputId.value = item.ID;
     inputName.value = item.Item_Name;
     inputQty.value = item.Remaining_Qty;
-    inputUnit.value = item.Unit;
+    
+    // Populate unit dropdown and select current unit
+    populateUnitSelect(item.Unit);
     
     // Format date properly for input type=date
     if (item.Expiry_Date) {
@@ -214,11 +406,38 @@ function setupEventListeners() {
     openAddModalBtn.addEventListener('click', () => {
         resetForm();
         modalTitle.textContent = "Add to Fridge";
+        populateUnitSelect();
         itemModal.classList.remove('hidden');
     });
     
     closeModalBtn.addEventListener('click', () => {
         itemModal.classList.add('hidden');
+    });
+    
+    // Unit modal triggers
+    manageUnitsBtn.addEventListener('click', () => {
+        openUnitsModal();
+    });
+    
+    closeUnitsModalBtn.addEventListener('click', () => {
+        unitsModal.classList.add('hidden');
+    });
+    
+    addNewUnitBtn.addEventListener('click', () => {
+        addNewUnit();
+    });
+    
+    newUnitInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addNewUnit();
+        }
+    });
+    
+    inputUnit.addEventListener('change', () => {
+        if (inputUnit.value === '__ADD_NEW__') {
+            openUnitsModal();
+        }
     });
     
     // Category Chips
@@ -351,8 +570,8 @@ function resetForm() {
     inputId.value = '';
     inputName.value = '';
     inputQty.value = '1';
-    inputUnit.value = 'ชิ้น';
     inputExpiry.value = getFormattedDate(new Date());
+    populateUnitSelect();
     
     // Deselect all chips
     inputCategory.value = '';
