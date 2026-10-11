@@ -1,4 +1,26 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxMKeFeshxXhEspKNfZHBCcLVsK3HCXIUq0rXAvUMes53gjzHjc9v2rhf3USsXs2Jy7/exec";
+// --- Firebase Configuration ---
+const firebaseConfig = {
+  apiKey: "AIzaSyA4WRTEmiXsqqUtfoGVqMjECd41JAlua8w",
+  authDomain: "tooyenkung-72ac9.firebaseapp.com",
+  projectId: "tooyenkung-72ac9",
+  storageBucket: "tooyenkung-72ac9.firebasestorage.app",
+  messagingSenderId: "562253307247",
+  appId: "1:562253307247:web:aaecac4898a8f1f4435c9a"
+};
+
+// Initialize Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
+
+// Optional: Enable offline persistence for snappy local caching
+db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+    console.warn("Firestore offline persistence notice:", err.code);
+});
+
+// --- Security / Family PIN ---
+const FAMILY_PIN = "1234"; // Default Family PIN
 
 // --- State ---
 let inventory = [];
@@ -6,6 +28,11 @@ const DEFAULT_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุ�
 let units = [...DEFAULT_UNITS];
 
 // --- DOM Elements ---
+const pinLockScreen = document.getElementById('pinLockScreen');
+const pinForm = document.getElementById('pinForm');
+const pinInput = document.getElementById('pinInput');
+const pinError = document.getElementById('pinError');
+
 const refreshBtn = document.getElementById('refreshBtn');
 const itemsContainer = document.getElementById('itemsContainer');
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -37,31 +64,102 @@ const unitsListContainer = document.getElementById('unitsListContainer');
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    units = getUnits();
-    populateUnitSelect();
-    fetchItems();
+    checkFamilyPinAuth();
     setupEventListeners();
     
     // Set default date to today for presets logic
     inputExpiry.value = getFormattedDate(new Date());
 });
 
-// --- Unit Management (Synced with Google Sheets & LocalStorage) ---
+// --- Family PIN Authentication ---
 
-function getUnits() {
-    try {
-        const saved = localStorage.getItem('tooyenkung_units');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch (e) {
-        console.error("Error reading units:", e);
+function checkFamilyPinAuth() {
+    const isAuth = localStorage.getItem('tooyenkung_pin_auth');
+    if (isAuth === 'true') {
+        pinLockScreen.classList.add('hidden');
+        startRealtimeListeners();
+    } else {
+        pinLockScreen.classList.remove('hidden');
+        pinInput.focus();
     }
-    return [...DEFAULT_UNITS];
 }
 
-function saveUnits(unitsList) {
+pinForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (pinInput.value === FAMILY_PIN) {
+        localStorage.setItem('tooyenkung_pin_auth', 'true');
+        pinLockScreen.classList.add('hidden');
+        pinError.classList.add('hidden');
+        startRealtimeListeners();
+    } else {
+        pinError.classList.remove('hidden');
+        pinInput.value = '';
+        pinInput.focus();
+    }
+});
+
+function startRealtimeListeners() {
+    listenToUnits();
+    listenToInventory();
+}
+
+// --- Realtime Database Listeners (Firestore) ---
+
+function listenToInventory() {
+    showLoading(true);
+    db.collection('inventory').onSnapshot((snapshot) => {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        const items = [];
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            // Show only Active and Low items (hide Depleted)
+            if (data.Status !== 'Depleted') {
+                const expiryDate = new Date(data.Expiry_Date);
+                const diffTime = expiryDate - now;
+                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                items.push({
+                    ID: doc.id,
+                    id: doc.id,
+                    ...data,
+                    daysLeft
+                });
+            }
+        });
+
+        // Sort items by Expiry_Date (closest expiry first)
+        items.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
+        inventory = items;
+        renderItems();
+        showLoading(false);
+    }, (error) => {
+        console.error("Firestore inventory listener error:", error);
+        showLoading(false);
+        showToast("ไม่สามารถโหลดข้อมูลจากคลาวด์ได้");
+    });
+}
+
+function listenToUnits() {
+    db.collection('settings').doc('units').onSnapshot((doc) => {
+        if (doc.exists && Array.isArray(doc.data().list) && doc.data().list.length > 0) {
+            units = doc.data().list;
+        } else {
+            // Seed default units if database is new
+            units = [...DEFAULT_UNITS];
+            db.collection('settings').doc('units').set({ list: DEFAULT_UNITS }, { merge: true });
+        }
+        saveUnitsLocal(units);
+        populateUnitSelect(inputUnit.value);
+        renderUnitsList();
+    }, (error) => {
+        console.error("Firestore units listener error:", error);
+    });
+}
+
+// --- Unit Management ---
+
+function saveUnitsLocal(unitsList) {
     units = unitsList;
     localStorage.setItem('tooyenkung_units', JSON.stringify(unitsList));
 }
@@ -69,10 +167,8 @@ function saveUnits(unitsList) {
 function populateUnitSelect(selectedVal) {
     inputUnit.innerHTML = '';
     
-    // If selectedVal is provided and not in the list, keep it
     if (selectedVal && !units.includes(selectedVal)) {
         units.push(selectedVal);
-        saveUnits(units);
     }
     
     units.forEach(u => {
@@ -83,7 +179,7 @@ function populateUnitSelect(selectedVal) {
         inputUnit.appendChild(opt);
     });
     
-    // Add custom trigger option
+    // Quick Add trigger
     const addOpt = document.createElement('option');
     addOpt.value = '__ADD_NEW__';
     addOpt.textContent = '+ เพิ่มหน่วยใหม่...';
@@ -136,22 +232,15 @@ async function addNewUnit() {
         return;
     }
     
-    // 1. Optimistic local update
-    units.push(name);
-    saveUnits(units);
     newUnitInput.value = '';
-    renderUnitsList();
-    populateUnitSelect(name);
     showToast(`เพิ่มหน่วย "${name}" เรียบร้อย`);
     
-    // 2. Sync to Google Sheets
     try {
-        await apiRequest({
-            action: 'add_unit',
-            unit: name
-        });
+        await db.collection('settings').doc('units').set({
+            list: firebase.firestore.FieldValue.arrayUnion(name)
+        }, { merge: true });
     } catch (err) {
-        console.error("Error syncing unit to Google Sheets:", err);
+        console.error("Error adding unit to Firestore:", err);
     }
 }
 
@@ -165,103 +254,27 @@ async function editUnitName(oldName) {
         return;
     }
     
-    // 1. Optimistic update
-    const updatedUnits = units.map(u => u === oldName ? trimmed : u);
-    saveUnits(updatedUnits);
-    renderUnitsList();
-    populateUnitSelect(trimmed);
     showToast(`เปลี่ยนชื่อหน่วยเป็น "${trimmed}" แล้ว`);
     
-    // 2. Sync to Google Sheets
     try {
-        await apiRequest({
-            action: 'update_unit',
-            oldUnit: oldName,
-            newUnit: trimmed
-        });
+        const updated = units.map(u => u === oldName ? trimmed : u);
+        await db.collection('settings').doc('units').set({ list: updated }, { merge: true });
     } catch (err) {
-        console.error("Error updating unit on Google Sheets:", err);
+        console.error("Error updating unit in Firestore:", err);
     }
 }
 
 async function deleteUnitName(name) {
     if (!confirm(`ต้องการลบหน่วย "${name}" ใช่หรือไม่?`)) return;
-    
-    // 1. Optimistic update
-    const updatedUnits = units.filter(u => u !== name);
-    saveUnits(updatedUnits);
-    renderUnitsList();
-    populateUnitSelect();
     showToast(`ลบหน่วย "${name}" แล้ว`);
     
-    // 2. Sync to Google Sheets
     try {
-        await apiRequest({
-            action: 'delete_unit',
-            unit: name
+        await db.collection('settings').doc('units').update({
+            list: firebase.firestore.FieldValue.arrayRemove(name)
         });
     } catch (err) {
-        console.error("Error deleting unit on Google Sheets:", err);
+        console.error("Error deleting unit in Firestore:", err);
     }
-}
-
-// --- API Calls ---
-
-async function fetchItems() {
-    showLoading(true);
-    try {
-        const response = await fetch(API_URL);
-        const data = await response.json();
-        
-        let rawInventory = [];
-        
-        // Support both old array format and new { inventory, units } structure
-        if (Array.isArray(data)) {
-            rawInventory = data;
-        } else if (data && typeof data === 'object') {
-            rawInventory = data.inventory || [];
-            if (Array.isArray(data.units) && data.units.length > 0) {
-                saveUnits(data.units);
-                populateUnitSelect(inputUnit.value);
-            }
-        }
-        
-        // Filter out Depleted, calculate days left, and sort
-        const now = new Date();
-        now.setHours(0,0,0,0);
-        
-        inventory = rawInventory
-            .filter(item => item.Status !== 'Depleted')
-            .map(item => {
-                const expiryDate = new Date(item.Expiry_Date);
-                const diffTime = expiryDate - now;
-                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return { ...item, daysLeft };
-            })
-            .sort((a, b) => {
-                const dateA = new Date(a.Expiry_Date);
-                const dateB = new Date(b.Expiry_Date);
-                return dateA - dateB;
-            });
-            
-        renderItems();
-    } catch (error) {
-        console.error("Error fetching items:", error);
-        showToast("Failed to load items.");
-    } finally {
-        showLoading(false);
-    }
-}
-
-async function apiRequest(bodyData) {
-    const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "text/plain;charset=utf-8", // text/plain to avoid CORS preflight
-        },
-        body: JSON.stringify(bodyData)
-    });
-    return await response.json();
 }
 
 // --- UI Rendering ---
@@ -365,13 +378,12 @@ async function adjustQty(id, delta) {
     showToast(`ปรับ "${item.Item_Name}" เหลือ ${newQty} ${item.Unit}`);
 
     try {
-        await apiRequest({
-            action: 'update',
-            id: id,
-            updates: { Remaining_Qty: newQty }
+        await db.collection('inventory').doc(id).update({
+            Remaining_Qty: newQty,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch (err) {
-        console.error("Failed to update qty:", err);
+        console.error("Firestore update qty error:", err);
         showToast("บันทึกจำนวนไม่สำเร็จ");
     }
 }
@@ -381,34 +393,22 @@ async function adjustQty(id, delta) {
 async function markDepleted(id) {
     if (!confirm("Confirm mark as depleted?")) return;
     
-    // Optimistic UI update (hide immediately)
-    const itemCard = document.querySelector(`button[onclick="markDepleted('${id}')"]`)?.closest('.bg-white');
-    if (itemCard) itemCard.style.display = 'none';
-    
-    // Backup and remove from local array
+    // Optimistic UI update
     const backupItem = inventory.find(i => i.ID === id);
     inventory = inventory.filter(i => i.ID !== id);
-    renderItems(); // Re-render instantly
+    renderItems();
+    showToast("Item removed.");
     
     try {
-        const result = await apiRequest({
-            action: 'deplete',
-            id: id,
-            updates: { Status: 'Depleted' }
+        await db.collection('inventory').doc(id).update({
+            Status: 'Depleted',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
-        if (result.success) {
-            showToast("Item removed.");
-        } else {
-            throw new Error(result.message);
-        }
     } catch (error) {
-        console.error("Error depleting item:", error);
+        console.error("Error depleting item in Firestore:", error);
         showToast("Failed to remove item.");
-        // Restore on failure
         if (backupItem) {
             inventory.push(backupItem);
-            inventory.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
             renderItems();
         }
     }
@@ -423,18 +423,14 @@ function editItem(id) {
     inputName.value = item.Item_Name;
     inputQty.value = item.Remaining_Qty;
     
-    // Populate unit dropdown and select current unit
     populateUnitSelect(item.Unit);
     
-    // Format date properly for input type=date
     if (item.Expiry_Date) {
         const d = new Date(item.Expiry_Date);
         inputExpiry.value = getFormattedDate(d);
     }
     
-    // Select category chip
     selectCategoryChip(item.Category);
-    
     itemModal.classList.remove('hidden');
 }
 
@@ -443,9 +439,10 @@ function editItem(id) {
 function setupEventListeners() {
     refreshBtn.addEventListener('click', () => {
         refreshBtn.querySelector('i').classList.add('fa-spin');
-        fetchItems().then(() => {
+        setTimeout(() => {
             refreshBtn.querySelector('i').classList.remove('fa-spin');
-        });
+            showToast("อัปเดตข้อมูลสดแล้ว");
+        }, 500);
     });
     
     openAddModalBtn.addEventListener('click', () => {
@@ -503,7 +500,7 @@ function setupEventListeners() {
         });
     });
     
-    // Form Submit
+    // Form Submit (Save to Firestore)
     itemForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -515,45 +512,31 @@ function setupEventListeners() {
         
         const formData = {
             Item_Name: inputName.value.trim(),
-            Category: inputCategory.value,
-            Remaining_Qty: parseFloat(inputQty.value),
-            Unit: inputUnit.value,
+            Category: inputCategory.value || 'อื่นๆ',
+            Remaining_Qty: parseFloat(inputQty.value) || 1,
+            Unit: inputUnit.value || 'ชิ้น',
             Expiry_Date: inputExpiry.value,
             Purchase_Date: getFormattedDate(new Date())
         };
         
         try {
-            // Helper to calc days left
-            const calcDays = (dateStr) => {
-                const now = new Date();
-                now.setHours(0,0,0,0);
-                return Math.ceil((new Date(dateStr) - now) / (1000 * 60 * 60 * 24));
-            };
-
             if (isUpdate) {
-                await apiRequest({ action: 'update', id: inputId.value, updates: formData });
-                // Update local array
-                const index = inventory.findIndex(i => i.ID === inputId.value);
-                if (index !== -1) {
-                    inventory[index] = { ...inventory[index], ...formData, daysLeft: calcDays(formData.Expiry_Date) };
-                }
+                await db.collection('inventory').doc(inputId.value).update({
+                    ...formData,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast("Item updated!");
             } else {
                 formData.Status = 'Active';
-                const result = await apiRequest({ action: 'add', item: formData });
-                if (result.success) {
-                    formData.ID = result.id || 'ITEM-' + Date.now();
-                    formData.daysLeft = calcDays(formData.Expiry_Date);
-                    inventory.push(formData);
-                }
+                formData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                formData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('inventory').add(formData);
+                showToast("Item added!");
             }
             
-            // Re-sort locally and re-render without fetching
-            inventory.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
-            showToast(isUpdate ? "Item updated!" : "Item added!");
             itemModal.classList.add('hidden');
-            renderItems(); // Instant update
         } catch (error) {
-            console.error("Error saving:", error);
+            console.error("Error saving to Firestore:", error);
             showToast("Failed to save item.");
         } finally {
             submitText.textContent = "Save to Fridge";

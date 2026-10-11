@@ -11,6 +11,10 @@
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
     <style>
         /* Mobile-friendly resets */
         body {
@@ -35,10 +39,32 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans pb-24">
 
+    <!-- Family PIN Lock Screen (Shown only if not authorized) -->
+    <div id="pinLockScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center hidden">
+        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-4">
+            <i class="fa-solid fa-lock"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">TooYenKung Family</h2>
+        <p class="text-sm text-gray-500 mb-6">กรุณากรอกรหัสผ่านครอบครัว (Family PIN)</p>
+        
+        <form id="pinForm" class="w-full max-w-xs space-y-4">
+            <input type="password" id="pinInput" maxlength="6" inputmode="numeric" placeholder="••••" class="w-full text-center text-3xl tracking-widest py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit" class="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl text-lg shadow-md active:bg-blue-700">
+                เข้าสู่ตู้เย็น
+            </button>
+            <p id="pinError" class="text-red-500 text-sm hidden font-medium">รหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง</p>
+        </form>
+    </div>
+
     <!-- Header -->
     <header class="bg-white shadow-sm sticky top-0 z-10">
         <div class="px-4 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-blue-600"><i class="fa-solid fa-snowflake mr-2"></i>TooYenKung</h1>
+            <div class="flex items-center space-x-2">
+                <h1 class="text-xl font-bold text-blue-600"><i class="fa-solid fa-snowflake mr-2"></i>TooYenKung</h1>
+                <span id="syncBadge" class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium flex items-center">
+                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>Live
+                </span>
+            </div>
             <button id="refreshBtn" class="text-gray-500 hover:text-blue-600 w-11 h-11 flex justify-center items-center rounded-full">
                 <i class="fa-solid fa-rotate-right text-lg"></i>
             </button>
@@ -59,8 +85,8 @@
         <!-- Empty State -->
         <div id="emptyState" class="hidden flex-col items-center justify-center py-12 text-gray-400 text-center">
             <i class="fa-solid fa-basket-shopping text-4xl mb-4 text-gray-300"></i>
-            <p class="text-lg font-medium text-gray-600">Fridge is empty!</p>
-            <p class="text-sm mt-1">Tap the + button to add items.</p>
+            <p class="text-lg font-medium text-gray-600">ตู้เย็นว่างเปล่า!</p>
+            <p class="text-sm mt-1">กดปุ่ม + ด้านล่างเพื่อเริ่มบันทึกของเข้าตู้</p>
         </div>
     </main>
 
