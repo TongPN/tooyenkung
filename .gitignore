@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Environment and Secrets
+.env
+.env.*
+*.local
+secrets/
+*.secret
+
+# Node / Scratch
+scratch/
+*.log
