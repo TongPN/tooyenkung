@@ -52,6 +52,7 @@ const inputName = document.getElementById('itemName');
 const inputCategory = document.getElementById('itemCategory');
 const inputQty = document.getElementById('itemQty');
 const inputUnit = document.getElementById('itemUnit');
+const inputPurchase = document.getElementById('itemPurchase');
 const inputExpiry = document.getElementById('itemExpiry');
 
 // Units Modal Elements
@@ -62,13 +63,25 @@ const newUnitInput = document.getElementById('newUnitInput');
 const addNewUnitBtn = document.getElementById('addNewUnitBtn');
 const unitsListContainer = document.getElementById('unitsListContainer');
 
+// History Modal Elements
+const historyModal = document.getElementById('historyModal');
+const closeHistoryModalBtn = document.getElementById('closeHistoryModalBtn');
+const historyItemTitle = document.getElementById('historyItemTitle');
+const historyBuyDate = document.getElementById('historyBuyDate');
+const historyInitialQty = document.getElementById('historyInitialQty');
+const historyUsedQty = document.getElementById('historyUsedQty');
+const historyRemainingQty = document.getElementById('historyRemainingQty');
+const historyTimeline = document.getElementById('historyTimeline');
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     checkFamilyPinAuth();
     setupEventListeners();
     
-    // Set default date to today for presets logic
-    inputExpiry.value = getFormattedDate(new Date());
+    // Set default dates to today
+    const todayStr = getFormattedDate(new Date());
+    inputPurchase.value = todayStr;
+    inputExpiry.value = todayStr;
 });
 
 // --- Family PIN Authentication ---
@@ -311,13 +324,18 @@ function renderItems() {
             icon = "fa-clock text-orange-500";
         }
         
+        const usedCount = item.usedCount || 0;
+        
         const card = document.createElement('div');
         card.className = `bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col`;
         card.innerHTML = `
-            <div class="flex justify-between items-start mb-2">
+            <div class="flex justify-between items-start mb-1">
                 <div>
-                    <h3 class="font-bold text-lg text-gray-800">${item.Item_Name}</h3>
-                    <p class="text-sm text-gray-500">${item.Category || 'No Category'}</p>
+                    <h3 class="font-bold text-lg text-gray-800 leading-tight">${item.Item_Name}</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">${item.Category || 'ทั่วไป'}</p>
+                    <p class="text-xs text-blue-600 font-medium mt-1 flex items-center">
+                        <i class="fa-solid fa-cart-shopping mr-1.5 text-blue-400"></i>ซื้อเมื่อ: ${item.Purchase_Date || '-'}
+                    </p>
                 </div>
                 <div class="${colorClass} px-3 py-1 rounded-full text-xs font-bold border flex items-center shadow-sm">
                     <i class="fa-solid ${icon} mr-1.5"></i>
@@ -325,27 +343,32 @@ function renderItems() {
                 </div>
             </div>
             
-            <!-- Quick Quantity Adjustment Stepper -->
-            <div class="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-xl my-2 border border-gray-100">
-                <span class="text-xs font-semibold text-gray-500">คงเหลือในตู้:</span>
-                <div class="flex items-center space-x-2">
-                    <button onclick="adjustQty('${item.ID}', -1)" class="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 text-gray-700 flex items-center justify-center font-bold active:bg-gray-200 text-sm" title="ลด 1 ${item.Unit}">
-                        <i class="fa-solid fa-minus text-xs"></i>
-                    </button>
-                    <span class="font-bold text-base text-gray-800 min-w-[3.5rem] text-center">
+            <!-- Quantity & Consumption Bar -->
+            <div class="flex items-center justify-between bg-gray-50 px-3.5 py-3 rounded-2xl my-2.5 border border-gray-100">
+                <div>
+                    <div class="text-[11px] font-semibold text-gray-500">คงเหลือในตู้:</div>
+                    <div class="text-xl font-black text-gray-800">
                         ${item.Remaining_Qty} <span class="text-xs font-normal text-gray-500">${item.Unit}</span>
-                    </span>
-                    <button onclick="adjustQty('${item.ID}', 1)" class="w-8 h-8 rounded-lg bg-white shadow-sm border border-gray-200 text-gray-700 flex items-center justify-center font-bold active:bg-gray-200 text-sm" title="เพิ่ม 1 ${item.Unit}">
-                        <i class="fa-solid fa-plus text-xs"></i>
+                    </div>
+                    ${usedCount > 0 ? `<div class="text-[11px] text-orange-600 font-medium mt-0.5">ใช้ไปแล้ว: ${usedCount} ${item.Unit}</div>` : ''}
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <button onclick="openHistoryModal('${item.ID}')" class="px-3 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold shadow-sm flex items-center active:bg-gray-100" title="ดูประวัติการหยิบใช้">
+                        <i class="fa-solid fa-clock-rotate-left mr-1.5 text-blue-500"></i>ประวัติ
+                    </button>
+                    <button onclick="consumeItem('${item.ID}', 1)" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center active:bg-blue-700" title="หยิบใช้ 1 ${item.Unit}">
+                        <i class="fa-solid fa-minus mr-1 text-[11px]"></i>ใช้ 1 ${item.Unit}
                     </button>
                 </div>
             </div>
             
-            <div class="flex justify-between mt-2 pt-2 border-t border-gray-100">
-                <button onclick="editItem('${item.ID}')" class="text-blue-600 font-medium py-2 px-4 bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100">
-                    <i class="fa-solid fa-pen-to-square mr-2"></i> Edit
+            <!-- Quick Actions -->
+            <div class="flex justify-between mt-1 pt-2 border-t border-gray-100">
+                <button onclick="editItem('${item.ID}')" class="text-blue-600 font-medium py-2 px-4 bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100 text-sm">
+                    <i class="fa-solid fa-pen-to-square mr-2"></i> แก้ไขข้อมูล
                 </button>
-                <button onclick="markDepleted('${item.ID}')" class="text-gray-600 font-medium py-2 px-4 bg-gray-100 rounded-xl w-[48%] flex justify-center items-center active:bg-gray-200">
+                <button onclick="markDepleted('${item.ID}')" class="text-gray-600 font-medium py-2 px-4 bg-gray-100 rounded-xl w-[48%] flex justify-center items-center active:bg-gray-200 text-sm">
                     <i class="fa-solid fa-trash mr-2"></i> ใช้หมดแล้ว
                 </button>
             </div>
@@ -354,17 +377,19 @@ function renderItems() {
     });
 }
 
-// --- Quick Quantity Adjustment ---
+// --- Consumption & History Logic ---
 
-async function adjustQty(id, delta) {
+async function consumeItem(id, amount = 1) {
     const item = inventory.find(i => i.ID === id);
     if (!item) return;
 
     const currentQty = parseFloat(item.Remaining_Qty) || 0;
-    const newQty = Math.round((currentQty + delta) * 10) / 10;
+    const newQty = Math.round((currentQty - amount) * 10) / 10;
+    const currentUsed = parseFloat(item.usedCount) || 0;
+    const newUsed = Math.round((currentUsed + amount) * 10) / 10;
     
     if (newQty <= 0) {
-        if (confirm(`คุณใช้ "${item.Item_Name}" จนหมดแล้วใช่หรือไม่?\nต้องการนำออกจากตู้เย็นเลยไหม?`)) {
+        if (confirm(`คุณหยิบใช้ "${item.Item_Name}" จนหมดแล้วใช่หรือไม่?\nต้องการตัดออกจากตู้เย็นเลยไหม?`)) {
             markDepleted(id);
             return;
         } else {
@@ -372,20 +397,81 @@ async function adjustQty(id, delta) {
         }
     }
 
+    // History log entry
+    const now = new Date();
+    const historyEntry = {
+        date: now.toISOString(),
+        displayDate: formatDisplayTime(now),
+        action: 'consume',
+        amount: amount,
+        remaining: newQty,
+        note: `หยิบใช้ ${amount} ${item.Unit} (คงเหลือ ${newQty} ${item.Unit})`
+    };
+
     // Optimistic UI update
     item.Remaining_Qty = newQty;
+    item.usedCount = newUsed;
+    if (!item.history) item.history = [];
+    item.history.push(historyEntry);
     renderItems();
-    showToast(`ปรับ "${item.Item_Name}" เหลือ ${newQty} ${item.Unit}`);
+    showToast(`ใช้ "${item.Item_Name}" 1 ${item.Unit} แล้ว`);
 
     try {
         await db.collection('inventory').doc(id).update({
             Remaining_Qty: newQty,
+            usedCount: newUsed,
+            history: firebase.firestore.FieldValue.arrayUnion(historyEntry),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch (err) {
-        console.error("Firestore update qty error:", err);
-        showToast("บันทึกจำนวนไม่สำเร็จ");
+        console.error("Firestore update consumption error:", err);
+        showToast("บันทึกข้อมูลไม่สำเร็จ");
     }
+}
+
+function openHistoryModal(id) {
+    const item = inventory.find(i => i.ID === id);
+    if (!item) return;
+
+    historyItemTitle.textContent = item.Item_Name;
+    historyBuyDate.textContent = item.Purchase_Date || '-';
+    historyInitialQty.textContent = `${item.Initial_Qty || item.Remaining_Qty} ${item.Unit}`;
+    historyUsedQty.textContent = `${item.usedCount || 0} ${item.Unit}`;
+    historyRemainingQty.textContent = `${item.Remaining_Qty} ${item.Unit}`;
+
+    historyTimeline.innerHTML = '';
+    const logs = item.history && item.history.length > 0 ? [...item.history].reverse() : [];
+
+    if (logs.length === 0) {
+        historyTimeline.innerHTML = `
+            <div class="text-center py-6 text-gray-400 text-sm">
+                <i class="fa-solid fa-box-open text-2xl mb-2 text-gray-300"></i>
+                <p>ยังไม่มีบันทึกการใช้งาน</p>
+                <p class="text-xs mt-1">นำเข้าเมื่อ ${item.Purchase_Date || '-'}</p>
+            </div>
+        `;
+    } else {
+        logs.forEach(log => {
+            const isCreate = log.action === 'create';
+            const badgeBg = isCreate ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700';
+            const icon = isCreate ? 'fa-cart-plus' : 'fa-utensils';
+
+            const row = document.createElement('div');
+            row.className = 'bg-gray-50 border border-gray-100 p-3 rounded-xl flex items-start space-x-3';
+            row.innerHTML = `
+                <div class="${badgeBg} w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs mt-0.5">
+                    <i class="fa-solid ${icon}"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="text-xs font-bold text-gray-800">${log.note || (isCreate ? 'นำเข้าตู้เย็น' : 'หยิบใช้')}</div>
+                    <div class="text-[11px] text-gray-400 mt-0.5">${log.displayDate || getFormattedDate(log.date)}</div>
+                </div>
+            `;
+            historyTimeline.appendChild(row);
+        });
+    }
+
+    historyModal.classList.remove('hidden');
 }
 
 // --- Interactions ---
@@ -400,8 +486,17 @@ async function markDepleted(id) {
     showToast("Item removed.");
     
     try {
+        const now = new Date();
+        const depleteEntry = {
+            date: now.toISOString(),
+            displayDate: formatDisplayTime(now),
+            action: 'deplete',
+            note: 'ใช้หมดแล้ว / นำออกจากตู้เย็น'
+        };
+
         await db.collection('inventory').doc(id).update({
             Status: 'Depleted',
+            history: firebase.firestore.FieldValue.arrayUnion(depleteEntry),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch (error) {
@@ -425,6 +520,12 @@ function editItem(id) {
     
     populateUnitSelect(item.Unit);
     
+    if (item.Purchase_Date) {
+        inputPurchase.value = item.Purchase_Date;
+    } else {
+        inputPurchase.value = getFormattedDate(new Date());
+    }
+
     if (item.Expiry_Date) {
         const d = new Date(item.Expiry_Date);
         inputExpiry.value = getFormattedDate(d);
@@ -454,6 +555,10 @@ function setupEventListeners() {
     
     closeModalBtn.addEventListener('click', () => {
         itemModal.classList.add('hidden');
+    });
+
+    closeHistoryModalBtn.addEventListener('click', () => {
+        historyModal.classList.add('hidden');
     });
     
     // Unit modal triggers
@@ -494,9 +599,10 @@ function setupEventListeners() {
     document.querySelectorAll('.expiry-preset').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const days = parseInt(e.target.getAttribute('data-days'));
-            const date = new Date();
-            date.setDate(date.getDate() + days);
-            inputExpiry.value = getFormattedDate(date);
+            // Preset calculates relative to Purchase Date if set, otherwise Today
+            const baseDate = inputPurchase.value ? new Date(inputPurchase.value) : new Date();
+            baseDate.setDate(baseDate.getDate() + days);
+            inputExpiry.value = getFormattedDate(baseDate);
         });
     });
     
@@ -510,13 +616,17 @@ function setupEventListeners() {
         saveSpinner.classList.remove('hidden');
         saveItemBtn.disabled = true;
         
+        const qtyNum = parseFloat(inputQty.value) || 1;
+        const unitVal = inputUnit.value || 'ชิ้น';
+        const purchaseVal = inputPurchase.value || getFormattedDate(new Date());
+
         const formData = {
             Item_Name: inputName.value.trim(),
             Category: inputCategory.value || 'อื่นๆ',
-            Remaining_Qty: parseFloat(inputQty.value) || 1,
-            Unit: inputUnit.value || 'ชิ้น',
-            Expiry_Date: inputExpiry.value,
-            Purchase_Date: getFormattedDate(new Date())
+            Remaining_Qty: qtyNum,
+            Unit: unitVal,
+            Purchase_Date: purchaseVal,
+            Expiry_Date: inputExpiry.value
         };
         
         try {
@@ -527,9 +637,20 @@ function setupEventListeners() {
                 });
                 showToast("Item updated!");
             } else {
+                const now = new Date();
                 formData.Status = 'Active';
+                formData.Initial_Qty = qtyNum;
+                formData.usedCount = 0;
+                formData.history = [{
+                    date: now.toISOString(),
+                    displayDate: formatDisplayTime(now),
+                    action: 'create',
+                    amount: qtyNum,
+                    note: `นำเข้าตู้เย็น ${qtyNum} ${unitVal} (ซื้อเมื่อ ${purchaseVal})`
+                }];
                 formData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                 formData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                
                 await db.collection('inventory').add(formData);
                 showToast("Item added!");
             }
@@ -581,6 +702,16 @@ function getFormattedDate(date) {
     return [year, month, day].join('-');
 }
 
+function formatDisplayTime(date) {
+    const d = new Date(date);
+    const day = d.getDate();
+    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const month = months[d.getMonth()];
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${hours}:${mins} น.`;
+}
+
 function selectCategoryChip(val) {
     inputCategory.value = val;
     document.querySelectorAll('.category-chip').forEach(chip => {
@@ -598,7 +729,11 @@ function resetForm() {
     inputId.value = '';
     inputName.value = '';
     inputQty.value = '1';
-    inputExpiry.value = getFormattedDate(new Date());
+    
+    const todayStr = getFormattedDate(new Date());
+    inputPurchase.value = todayStr;
+    inputExpiry.value = todayStr;
+    
     populateUnitSelect();
     
     // Deselect all chips
