@@ -112,11 +112,37 @@ const consumePresetsContainer = document.getElementById('consumePresetsContainer
 const consumePreviewRemaining = document.getElementById('consumePreviewRemaining');
 const consumeNoteInput = document.getElementById('consumeNoteInput');
 
+// AI Chef & Key Modal Elements
+const aiChefBtn = document.getElementById('aiChefBtn');
+const aiChefModal = document.getElementById('aiChefModal');
+const closeAiChefModalBtn = document.getElementById('closeAiChefModalBtn');
+const aiSettingsBtn = document.getElementById('aiSettingsBtn');
+const aiChefContent = document.getElementById('aiChefContent');
+const aiChefFooter = document.getElementById('aiChefFooter');
+const reGenerateAiBtn = document.getElementById('reGenerateAiBtn');
+const closeAiChefFooterBtn = document.getElementById('closeAiChefFooterBtn');
+
+const aiKeyModal = document.getElementById('aiKeyModal');
+const closeAiKeyModalBtn = document.getElementById('closeAiKeyModalBtn');
+const aiApiKeyInput = document.getElementById('aiApiKeyInput');
+const toggleAiKeyVisibilityBtn = document.getElementById('toggleAiKeyVisibilityBtn');
+const toggleAiKeyIcon = document.getElementById('toggleAiKeyIcon');
+const saveAiKeyBtn = document.getElementById('saveAiKeyBtn');
+const saveAiKeySpinner = document.getElementById('saveAiKeySpinner');
+const aiKeyStatusBanner = document.getElementById('aiKeyStatusBanner');
+const clearAiKeyBtn = document.getElementById('clearAiKeyBtn');
+
+// AI State
+let aiApiKeyCache = null;
+let cachedAiRecipes = null;
+let isGeneratingAi = false;
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     checkFamilyPinAuth();
     setupEventListeners();
     setupTabNavigation();
+    setupAiEventListeners();
     
     // Set default dates to today
     const todayStr = getFormattedDate(new Date());
@@ -319,7 +345,7 @@ function showModal(modalElem) {
 function hideModal(modalElem) {
     if (!modalElem) return;
     modalElem.classList.add('hidden');
-    const hasOpenModal = [itemModal, consumeModal, unitsModal].some(m => m && !m.classList.contains('hidden'));
+    const hasOpenModal = [itemModal, consumeModal, unitsModal, aiChefModal, aiKeyModal].some(m => m && !m.classList.contains('hidden'));
     if (!hasOpenModal) {
         document.body.classList.remove('modal-open');
     }
@@ -992,7 +1018,7 @@ function setupEventListeners() {
     }
 
     // Backdrop click to close modals
-    [itemModal, consumeModal, unitsModal].forEach(modal => {
+    [itemModal, consumeModal, unitsModal, aiChefModal, aiKeyModal].forEach(modal => {
         if (modal) {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
@@ -1185,3 +1211,628 @@ function resetForm() {
         chip.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
     });
 }
+
+// =========================================================================
+// --- AI Chef Feature (Gemini API • Thai & Japanese Recipe Suggestions) ---
+// =========================================================================
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// --- Dynamic Firestore AI API Key Management (Zero secrets in Public Git) ---
+
+async function getAiApiKey() {
+    if (aiApiKeyCache) return aiApiKeyCache;
+    try {
+        const doc = await db.collection('settings').doc('ai_config').get();
+        if (doc.exists && doc.data() && doc.data().apiKey) {
+            aiApiKeyCache = String(doc.data().apiKey).trim();
+            return aiApiKeyCache;
+        }
+    } catch (err) {
+        console.warn("AI API Key fetch notice:", err);
+    }
+    return null;
+}
+
+async function saveAiApiKey(key) {
+    const cleanKey = String(key || '').trim();
+    if (!cleanKey) throw new Error("กรุณากรอก API Key");
+    await db.collection('settings').doc('ai_config').set({
+        apiKey: cleanKey,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    aiApiKeyCache = cleanKey;
+}
+
+async function deleteAiApiKey() {
+    await db.collection('settings').doc('ai_config').delete();
+    aiApiKeyCache = null;
+    cachedAiRecipes = null;
+}
+
+// --- Setup AI Event Listeners ---
+
+function setupAiEventListeners() {
+    // Open AI Chef
+    if (aiChefBtn) {
+        aiChefBtn.addEventListener('click', handleAiChefClick);
+    }
+
+    // Modal Close buttons
+    if (closeAiChefModalBtn) {
+        closeAiChefModalBtn.addEventListener('click', () => hideModal(aiChefModal));
+    }
+    if (closeAiChefFooterBtn) {
+        closeAiChefFooterBtn.addEventListener('click', () => hideModal(aiChefModal));
+    }
+
+    // AI Settings Button (Gear)
+    if (aiSettingsBtn) {
+        aiSettingsBtn.addEventListener('click', openAiKeyModal);
+    }
+
+    // Re-generate Recipes
+    if (reGenerateAiBtn) {
+        reGenerateAiBtn.addEventListener('click', () => generateAiRecipes(true));
+    }
+
+    // AI Key Modal handlers
+    if (closeAiKeyModalBtn) {
+        closeAiKeyModalBtn.addEventListener('click', () => hideModal(aiKeyModal));
+    }
+
+    if (toggleAiKeyVisibilityBtn && aiApiKeyInput && toggleAiKeyIcon) {
+        toggleAiKeyVisibilityBtn.addEventListener('click', () => {
+            if (aiApiKeyInput.type === 'password') {
+                aiApiKeyInput.type = 'text';
+                toggleAiKeyIcon.classList.remove('fa-eye');
+                toggleAiKeyIcon.classList.add('fa-eye-slash');
+            } else {
+                aiApiKeyInput.type = 'password';
+                toggleAiKeyIcon.classList.remove('fa-eye-slash');
+                toggleAiKeyIcon.classList.add('fa-eye');
+            }
+        });
+    }
+
+    if (saveAiKeyBtn) {
+        saveAiKeyBtn.addEventListener('click', async () => {
+            const keyVal = aiApiKeyInput ? aiApiKeyInput.value.trim() : '';
+            if (!keyVal) {
+                showToast("กรุณากรอก Gemini API Key");
+                return;
+            }
+
+            const btnText = saveAiKeyBtn.querySelector('span');
+            if (btnText) btnText.textContent = "กำลังบันทึก...";
+            if (saveAiKeySpinner) saveAiKeySpinner.classList.remove('hidden');
+            saveAiKeyBtn.disabled = true;
+
+            try {
+                await saveAiApiKey(keyVal);
+                showToast("บันทึก Gemini API Key เรียบร้อย! 🎉");
+                hideModal(aiKeyModal);
+                
+                // If AI Chef modal was open or initiated, run recipe generation
+                const activeItems = inventory.filter(i => i.Status !== 'Depleted' && parseFloat(i.Remaining_Qty) > 0);
+                if (activeItems.length > 0) {
+                    showModal(aiChefModal);
+                    generateAiRecipes(false);
+                }
+            } catch (err) {
+                console.error("Save AI key error:", err);
+                showToast("บันทึก API Key ไม่สำเร็จ: " + (err.message || "ลองใหม่อีกครั้ง"));
+            } finally {
+                if (btnText) btnText.textContent = "บันทึก API Key";
+                if (saveAiKeySpinner) saveAiKeySpinner.classList.add('hidden');
+                saveAiKeyBtn.disabled = false;
+            }
+        });
+    }
+
+    if (clearAiKeyBtn) {
+        clearAiKeyBtn.addEventListener('click', async () => {
+            if (confirm("ต้องการลบ Gemini API Key ออกจากระบบครอบครัวใช่หรือไม่?")) {
+                try {
+                    await deleteAiApiKey();
+                    if (aiApiKeyInput) aiApiKeyInput.value = '';
+                    if (aiKeyStatusBanner) aiKeyStatusBanner.classList.add('hidden');
+                    showToast("ลบ API Key เรียบร้อยแล้ว");
+                } catch (err) {
+                    showToast("เกิดข้อผิดพลาดในการลบคีย์");
+                }
+            }
+        });
+    }
+
+    // Event delegation inside aiChefContent
+    if (aiChefContent) {
+        aiChefContent.addEventListener('click', (e) => {
+            // Copy shopping list button
+            const copyBtn = e.target.closest('.copy-shopping-btn');
+            if (copyBtn) {
+                const idx = parseInt(copyBtn.getAttribute('data-recipe-idx'), 10);
+                if (cachedAiRecipes && cachedAiRecipes.recipes && cachedAiRecipes.recipes[idx]) {
+                    copyShoppingList(cachedAiRecipes.recipes[idx]);
+                }
+                return;
+            }
+
+            // Retry button
+            const retryBtn = e.target.closest('#aiRetryBtn');
+            if (retryBtn) {
+                generateAiRecipes(true);
+                return;
+            }
+
+            // Edit key button from error
+            const editKeyBtn = e.target.closest('#aiKeyEditFromErrBtn');
+            if (editKeyBtn) {
+                openAiKeyModal();
+                return;
+            }
+
+            // Add item button from empty fridge
+            const addBtn = e.target.closest('#aiCloseAndAddBtn');
+            if (addBtn) {
+                hideModal(aiChefModal);
+                if (openAddModalBtn) openAddModalBtn.click();
+                return;
+            }
+        });
+    }
+}
+
+async function openAiKeyModal() {
+    const currentKey = await getAiApiKey();
+    if (currentKey) {
+        if (aiKeyStatusBanner) {
+            aiKeyStatusBanner.classList.remove('hidden');
+            const masked = currentKey.length > 8 
+                ? currentKey.substring(0, 6) + '••••••••' + currentKey.substring(currentKey.length - 4)
+                : '••••••••';
+            const statusSpan = aiKeyStatusBanner.querySelector('span');
+            if (statusSpan) {
+                statusSpan.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5 text-green-500"></i>ตั้งค่าแล้ว (${masked})`;
+            }
+        }
+        if (aiApiKeyInput) aiApiKeyInput.value = currentKey;
+    } else {
+        if (aiKeyStatusBanner) aiKeyStatusBanner.classList.add('hidden');
+        if (aiApiKeyInput) aiApiKeyInput.value = '';
+    }
+    showModal(aiKeyModal);
+    setTimeout(() => {
+        if (aiApiKeyInput && !currentKey) aiApiKeyInput.focus();
+    }, 150);
+}
+
+async function handleAiChefClick() {
+    const activeItems = inventory.filter(i => i.Status !== 'Depleted' && parseFloat(i.Remaining_Qty) > 0);
+    if (activeItems.length === 0) {
+        showModal(aiChefModal);
+        renderAiEmptyFridge();
+        return;
+    }
+
+    const key = await getAiApiKey();
+    if (!key) {
+        openAiKeyModal();
+        return;
+    }
+
+    showModal(aiChefModal);
+    if (!cachedAiRecipes) {
+        generateAiRecipes(false);
+    } else {
+        renderAiRecipes(cachedAiRecipes);
+    }
+}
+
+// --- Prompt Builder & Gemini API Execution ---
+
+function buildAiPrompt(activeInventory) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Sort items by expiry date (near expiry first)
+    const sortedItems = [...activeInventory].sort((a, b) => {
+        return new Date(a.Expiry_Date || '2099-01-01') - new Date(b.Expiry_Date || '2099-01-01');
+    });
+
+    const itemsSummary = sortedItems.map(item => {
+        const exp = new Date(item.Expiry_Date || today);
+        exp.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((exp - today) / (1000 * 60 * 60 * 24));
+        let urgency = "";
+        if (diffDays < 0) urgency = " (⚠️ หมดอายุแล้ว)";
+        else if (diffDays === 0) urgency = " (🚨 หมดอายุวันนี้!)";
+        else if (diffDays <= 3) urgency = ` (⏳ ใกล้หมดอายุ เหลือ ${diffDays} วัน - ควรนำมาใช้ด่วน)`;
+        else urgency = ` (เหลืออีก ${diffDays} วัน)`;
+
+        return `- ${item.Item_Name} (หมวด: ${item.Category || 'ทั่วไป'}, คงเหลือ: ${item.Remaining_Qty} ${item.Unit})${urgency}`;
+    }).join('\n');
+
+    return `คุณคือ "AI Chef" ผู้เชี่ยวชาญการทำอาหารไทยและอาหารญี่ปุ่นประจำบ้าน
+หน้าที่ของคุณคือออกแบบเมนูอาหาร 2 เมนูที่อร่อย ปรุงง่าย เหมาะสำหรับทำทานในครอบครัว โดยใช้วัตถุดิบที่มีในตู้เย็นเป็นหลัก
+
+นี่คือรายการวัตถุดิบทั้งหมดที่มีในตู้เย็นปัจจุบัน:
+${itemsSummary}
+
+ข้อกำหนดและกฎสำคัญ (ต้องปฏิบัติตามอย่างเคร่งครัด):
+1. สไตล์อาหาร: เมนูที่แนะนำต้องเป็น "อาหารไทย" (Thai Cuisine) และ/หรือ "อาหารญี่ปุ่น" (Japanese Cuisine) เท่านั้น! (แนะนำ 2 เมนู เช่น อาหารไทย 1 เมนู และ อาหารญี่ปุ่น 1 เมนู หรือทั้ง 2 เมนูตามความเหมาะสมของวัตถุดิบ)
+2. วัตถุดิบใกล้หมดอายุ (Zero Waste): ให้ความสำคัญสูงสุดในการนำวัตถุดิบที่ "ใกล้หมดอายุ" มาใช้ปรุงเป็นอันดับแรกเพื่อไม่ให้ของเสียเปล่า
+3. กรณีของในตู้ไม่ครบ (สำคัญที่สุด!): หากวัตถุดิบหรือเครื่องปรุงในตู้ไม่ครบ ต้องระบุรายการ "ของที่ต้องซื้อเพิ่ม" (missing_ingredients) โดย **ต้องระบุปริมาณ/หน่วยที่ต้องใช้อย่างละเอียดและชัดเจน** เช่น "โชยุ 2 ช้อนโต๊ะ", "มิริน 1 ช้อนโต๊ะ", "ไข่ไก่ 2 ฟอง", "ต้นหอมญี่ปุ่น 1 ต้น", "น้ำมันหอย 1 ช้อนโต๊ะ" (ห้ามใส่แค่ชื่อวัตถุดิบโดยไม่มีปริมาณเด็ดขาด)
+4. วัตถุดิบจากตู้เย็นที่ใช้ (used_ingredients): ระบุว่านำของชิ้นไหนจากในตู้มาใช้ พร้อมปริมาณที่ต้องใช้ เช่น "หมูสันนอก 200 กรัม", "กะหล่ำปลี 1/2 หัว"
+5. วิธีทำ (instructions): สรุปขั้นตอนการทำอย่างกระชับ เข้าใจง่าย 3-4 ขั้นตอน มือใหม่ก็ทำตามได้
+6. เคล็ดลับเชฟ (chef_tip): คำแนะนำสั้นๆ 1 ประโยคเพื่อให้เมนูนี้อร่อยยิ่งขึ้น
+
+ตอบกลับเป็น JSON เท่านั้น ตามโครงสร้างนี้:
+{
+  "recipes": [
+    {
+      "name": "ชื่อเมนูภาษาไทย",
+      "cuisine": "อาหารไทย หรือ อาหารญี่ปุ่น",
+      "flag": "🇹🇭 หรือ 🇯🇵",
+      "description": "คำอธิบายความอร่อยสั้นๆ 1 ประโยค",
+      "prep_time": "เช่น 15-20 นาที",
+      "difficulty": "ง่าย หรือ ปานกลาง",
+      "used_ingredients": [
+        { "name": "ชื่อวัตถุดิบในตู้", "amount": "ปริมาณที่ใช้ เช่น 200 กรัม" }
+      ],
+      "missing_ingredients": [
+        { "name": "ชื่อวัตถุดิบ/เครื่องปรุงที่ต้องซื้อเพิ่ม", "amount": "ปริมาณที่ต้องใช้ เช่น 2 ช้อนโต๊ะ" }
+      ],
+      "instructions": [
+        "1. ...",
+        "2. ...",
+        "3. ..."
+      ],
+      "chef_tip": "เคล็ดลับเด็ด 1 ประโยค"
+    }
+  ]
+}`;
+}
+
+async function callGeminiApi(prompt, apiKey) {
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+    let lastError = null;
+
+    for (const model of models) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        temperature: 0.7
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.error?.message || `HTTP ${response.status}`;
+                if (response.status === 404) {
+                    console.warn(`Model ${model} not available, trying next fallback...`);
+                    lastError = new Error(errMsg);
+                    continue;
+                }
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawText) throw new Error("AI ไม่ได้ส่งคำตอบกลับมา ลองใหม่อีกครั้ง");
+
+            const cleanText = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+            const parsed = JSON.parse(cleanText);
+            if (!parsed.recipes || !Array.isArray(parsed.recipes)) {
+                throw new Error("รูปแบบข้อมูลเมนูไม่ถูกต้อง");
+            }
+            return parsed;
+        } catch (err) {
+            lastError = err;
+            if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('API key not valid'))) {
+                throw new Error("Gemini API Key ไม่ถูกต้อง กรุณาตรวจสอบหรือตั้งค่าใหม่");
+            }
+            if (err.message && err.message.includes('RESOURCE_EXHAUSTED')) {
+                throw new Error("โควต้าการใช้งานฟรีเต็มชั่วคราว กรุณารอสักครู่แล้วลองใหม่");
+            }
+        }
+    }
+    throw lastError || new Error("ไม่สามารถเชื่อมต่อ Gemini AI ได้");
+}
+
+async function generateAiRecipes(isRegenerate = false) {
+    if (isGeneratingAi) return;
+    isGeneratingAi = true;
+
+    renderAiLoading();
+
+    try {
+        const key = await getAiApiKey();
+        if (!key) {
+            openAiKeyModal();
+            return;
+        }
+
+        const activeItems = inventory.filter(i => i.Status !== 'Depleted' && parseFloat(i.Remaining_Qty) > 0);
+        if (activeItems.length === 0) {
+            renderAiEmptyFridge();
+            return;
+        }
+
+        const prompt = buildAiPrompt(activeItems);
+        const result = await callGeminiApi(prompt, key);
+        cachedAiRecipes = result;
+        renderAiRecipes(result);
+    } catch (err) {
+        console.error("AI Recipe generation error:", err);
+        renderAiError(err.message || "เกิดข้อผิดพลาดในการสร้างเมนู");
+    } finally {
+        isGeneratingAi = false;
+    }
+}
+
+// --- Render Helper Functions ---
+
+function renderAiLoading() {
+    if (aiChefFooter) aiChefFooter.classList.add('hidden');
+    if (!aiChefContent) return;
+
+    aiChefContent.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center text-3xl mb-4 animate-bounce shadow-xs">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-bold text-gray-800 mb-1">AI Chef กำลังคิดค้นเมนู...</h3>
+            <p class="text-xs text-gray-500 max-w-xs leading-relaxed">
+                กำลังวิเคราะห์วัตถุดิบใกล้หมดอายุในตู้เย็น และออกแบบเมนูไทย-ญี่ปุ่นสุดอร่อยพร้อมรายการของที่ต้องซื้อเพิ่ม
+            </p>
+            <div class="mt-5 flex items-center space-x-2 text-xs text-amber-600 font-semibold bg-amber-50 px-3.5 py-1.5 rounded-full border border-amber-200">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>รอประมาณ 3-5 วินาที</span>
+            </div>
+        </div>
+    `;
+}
+
+function renderAiEmptyFridge() {
+    if (aiChefFooter) aiChefFooter.classList.add('hidden');
+    if (!aiChefContent) return;
+
+    aiChefContent.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div class="w-16 h-16 bg-gray-100 text-gray-400 rounded-3xl flex items-center justify-center text-3xl mb-4">
+                <i class="fa-solid fa-basket-shopping"></i>
+            </div>
+            <h3 class="text-base font-bold text-gray-800 mb-1">ตู้เย็นยังไม่มีของเลย</h3>
+            <p class="text-xs text-gray-500 max-w-xs mb-5">
+                กรุณาบันทึกของเข้าตู้เย็นก่อนเรียก AI Chef เพื่อให้ AI วิเคราะห์วัตถุดิบที่มีได้ครับ
+            </p>
+            <button id="aiCloseAndAddBtn" class="px-5 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+                <i class="fa-solid fa-plus mr-1.5"></i>เพิ่มของเข้าตู้เย็น
+            </button>
+        </div>
+    `;
+}
+
+function renderAiError(message) {
+    if (aiChefFooter) aiChefFooter.classList.add('hidden');
+    if (!aiChefContent) return;
+
+    const isKeyIssue = message.includes('API Key') || message.includes('key');
+
+    aiChefContent.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <div class="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center text-2xl mb-3 shadow-xs">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-base font-bold text-gray-800 mb-1">ไม่สามารถแนะนำเมนูได้</h3>
+            <p class="text-xs text-red-500 max-w-xs mb-5 font-medium leading-relaxed">${escapeHtml(message)}</p>
+            <div class="flex space-x-2">
+                <button id="aiRetryBtn" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-xs transition-all">
+                    <i class="fa-solid fa-rotate-right mr-1.5"></i>ลองใหม่อีกครั้ง
+                </button>
+                ${isKeyIssue ? `
+                    <button id="aiKeyEditFromErrBtn" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors">
+                        <i class="fa-solid fa-key mr-1.5"></i>แก้ไข API Key
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderAiRecipes(data) {
+    if (!aiChefContent) return;
+    if (aiChefFooter) aiChefFooter.classList.remove('hidden');
+
+    const recipes = data.recipes || [];
+    if (recipes.length === 0) {
+        renderAiError("AI ไม่พบเมนูที่เหมาะสม ลองใหม่อีกครั้งครับ");
+        return;
+    }
+
+    let html = `
+        <div class="space-y-5">
+            <div class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-yellow-500/10 border border-amber-200/80 rounded-2xl p-3.5 flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm flex-shrink-0 shadow-xs">
+                    <i class="fa-solid fa-kitchen-set"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-amber-950">AI Chef คิดเมนูสำเร็จแล้ว! (${recipes.length} เมนู)</p>
+                    <p class="text-[11px] text-amber-800 truncate">เน้นใช้วัตถุดิบใกล้หมดอายุก่อน พร้อมคำนวณของที่ต้องซื้อเพิ่ม</p>
+                </div>
+            </div>
+    `;
+
+    recipes.forEach((r, idx) => {
+        const isJapanese = (r.cuisine && r.cuisine.includes('ญี่ปุ่น')) || (r.flag && r.flag.includes('🇯🇵'));
+        const cuisineBadgeClass = isJapanese 
+            ? "bg-rose-50 text-rose-700 border-rose-200" 
+            : "bg-blue-50 text-blue-700 border-blue-200";
+        const cuisineFlag = r.flag || (isJapanese ? "🇯🇵" : "🇹🇭");
+        const cuisineTitle = r.cuisine || (isJapanese ? "อาหารญี่ปุ่น" : "อาหารไทย");
+
+        const usedItems = Array.isArray(r.used_ingredients) ? r.used_ingredients : [];
+        const missingItems = Array.isArray(r.missing_ingredients) ? r.missing_ingredients : [];
+        const instructions = Array.isArray(r.instructions) ? r.instructions : [];
+
+        html += `
+            <div class="bg-white border border-gray-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm space-y-4 transition-all">
+                <!-- Header -->
+                <div class="space-y-1.5 border-b border-gray-100 pb-3">
+                    <div class="flex justify-between items-start">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${cuisineBadgeClass}">
+                            <span class="mr-1.5">${cuisineFlag}</span>${escapeHtml(cuisineTitle)}
+                        </span>
+                        <div class="flex items-center space-x-2 text-[11px] text-gray-500 font-semibold">
+                            ${r.prep_time ? `<span class="bg-gray-100 px-2 py-0.5 rounded-md"><i class="fa-regular fa-clock mr-1 text-gray-400"></i>${escapeHtml(r.prep_time)}</span>` : ''}
+                            ${r.difficulty ? `<span class="bg-gray-100 px-2 py-0.5 rounded-md"><i class="fa-solid fa-fire mr-1 text-amber-500"></i>${escapeHtml(r.difficulty)}</span>` : ''}
+                        </div>
+                    </div>
+                    <h3 class="text-base sm:text-lg font-black text-gray-800 leading-snug">
+                        ${escapeHtml(r.name)}
+                    </h3>
+                    ${r.description ? `<p class="text-xs text-gray-500 italic">${escapeHtml(r.description)}</p>` : ''}
+                </div>
+
+                <!-- Section 1: In-Fridge Ingredients -->
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                        <i class="fa-solid fa-snowflake text-blue-500 mr-1"></i>วัตถุดิบในตู้เย็นที่นำมาใช้ (${usedItems.length} อย่าง)
+                    </label>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${usedItems.map(item => `
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <i class="fa-solid fa-check text-emerald-600 mr-1 text-[10px]"></i>
+                                <span>${escapeHtml(item.name)}</span>
+                                ${item.amount ? `<span class="ml-1 font-bold text-emerald-900">(${escapeHtml(item.amount)})</span>` : ''}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Section 2: Missing Ingredients (with exact quantities & copy button) -->
+                <div>
+                    ${missingItems.length > 0 ? `
+                        <div class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3.5 space-y-2.5">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-amber-950 flex items-center">
+                                    <i class="fa-solid fa-cart-shopping mr-1.5 text-amber-600"></i>ต้องซื้อเพิ่ม (${missingItems.length} อย่าง)
+                                </span>
+                                <button type="button" class="copy-shopping-btn px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-bold transition-colors flex items-center active:scale-95" data-recipe-idx="${idx}" title="คัดลอกรายการไปจดหรือส่งไลน์">
+                                    <i class="fa-regular fa-copy mr-1 text-amber-600"></i>คัดลอกรายการ
+                                </button>
+                            </div>
+                            <ul class="space-y-1.5 text-xs text-amber-950 pl-1">
+                                ${missingItems.map(item => `
+                                    <li class="flex items-start">
+                                        <span class="text-amber-500 mr-2 font-bold">•</span>
+                                        <div class="flex-1">
+                                            <span class="font-bold text-amber-900">${escapeHtml(item.name)}</span>:
+                                            <span class="font-bold text-amber-700 bg-amber-100/90 px-1.5 py-0.2 rounded ml-1">${escapeHtml(item.amount || 'ตามชอบ')}</span>
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : `
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-800 font-bold flex items-center">
+                            <i class="fa-solid fa-circle-check text-emerald-600 mr-2 text-sm"></i>
+                            <span>วัตถุดิบและเครื่องปรุงครบถ้วนในตู้เย็น! พร้อมเริ่มปรุงได้ทันที 🎉</span>
+                        </div>
+                    `}
+                </div>
+
+                <!-- Section 3: Cooking Instructions -->
+                <div class="space-y-2 pt-1">
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        <i class="fa-solid fa-fire-burner text-orange-500 mr-1"></i>ขั้นตอนการทำ (${instructions.length} ขั้นตอน)
+                    </label>
+                    <div class="space-y-2 text-xs sm:text-sm text-gray-700 pl-0.5">
+                        ${instructions.map((step, sIdx) => {
+                            const cleanStep = step.replace(/^[0-9]+\.\s*/, '');
+                            return `
+                                <div class="flex items-start space-x-2.5">
+                                    <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs">
+                                        ${sIdx + 1}
+                                    </span>
+                                    <p class="leading-relaxed flex-1">${escapeHtml(cleanStep)}</p>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <!-- Section 4: Chef's Tip -->
+                ${r.chef_tip ? `
+                    <div class="bg-yellow-50/90 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-950 flex items-start space-x-2">
+                        <i class="fa-solid fa-lightbulb text-yellow-500 mt-0.5 flex-shrink-0"></i>
+                        <p class="leading-relaxed"><strong>เคล็ดลับจากเชฟ:</strong> ${escapeHtml(r.chef_tip)}</p>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    aiChefContent.innerHTML = html;
+}
+
+// --- Copy to Clipboard Helper ---
+
+function copyShoppingList(recipe) {
+    if (!recipe || !recipe.missing_ingredients || recipe.missing_ingredients.length === 0) {
+        showToast("เมนูนี้ไม่ต้องซื้อวัตถุดิบเพิ่มเลยครับ 🎉");
+        return;
+    }
+
+    const itemsText = recipe.missing_ingredients.map(i => `• ${i.name} (${i.amount || 'ตามชอบ'})`).join('\n');
+    const textToCopy = `🛒 รายการของที่ต้องซื้อสำหรับเมนู "${recipe.name}" (${recipe.cuisine || 'อาหาร'}):\n${itemsText}\n\n(บันทึกโดย TooYenKung AI Chef ✨)`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast("คัดลอกรายการของที่ต้องซื้อแล้ว! 🛒");
+        }).catch(() => {
+            fallbackCopy(textToCopy);
+        });
+    } else {
+        fallbackCopy(textToCopy);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+        document.execCommand('copy');
+        showToast("คัดลอกรายการของที่ต้องซื้อแล้ว! 🛒");
+    } catch (e) {
+        showToast("ไม่สามารถคัดลอกได้");
+    }
+    document.body.removeChild(ta);
+}
+
