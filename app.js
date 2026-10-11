@@ -19,8 +19,23 @@ db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
     console.warn("Firestore offline persistence notice:", err.code);
 });
 
-// --- Security / Family PIN ---
-const FAMILY_PIN = "1234"; // Default Family PIN
+// --- Security / Family Authentication ---
+// Authenticated dynamically via Firestore settings/security (Zero secrets in Public Git)
+let securityPinCache = null;
+
+async function getSecurityPin() {
+    if (securityPinCache) return securityPinCache;
+    try {
+        const doc = await db.collection('settings').doc('security').get();
+        if (doc.exists && doc.data() && doc.data().pin) {
+            securityPinCache = String(doc.data().pin).trim();
+            return securityPinCache;
+        }
+    } catch (err) {
+        console.warn("Security PIN check notice:", err);
+    }
+    return null;
+}
 
 // --- Discrete Units Definition ---
 const DISCRETE_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'ห่อ', 'จาน', 'มัด', 'ลูก', 'หัว', 'กระป๋อง'];
@@ -112,8 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- Family PIN Authentication ---
 
 function checkFamilyPinAuth() {
-    const isAuth = localStorage.getItem('tooyenkung_pin_auth');
-    if (isAuth === 'true') {
+    const isAuth = localStorage.getItem('tooyenkung_pin_auth') === 'true';
+    if (isAuth) {
         if (pinLockScreen) pinLockScreen.classList.add('hidden');
         startRealtimeListeners();
     } else {
@@ -125,19 +140,33 @@ function checkFamilyPinAuth() {
 }
 
 if (pinForm) {
-    pinForm.addEventListener('submit', (e) => {
+    pinForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (pinInput && pinInput.value === FAMILY_PIN) {
-            localStorage.setItem('tooyenkung_pin_auth', 'true');
-            if (pinLockScreen) pinLockScreen.classList.add('hidden');
-            if (pinError) pinError.classList.add('hidden');
-            startRealtimeListeners();
-        } else {
-            if (pinError) pinError.classList.remove('hidden');
-            if (pinInput) {
-                pinInput.value = '';
-                pinInput.focus();
+        const entered = pinInput ? pinInput.value.trim() : '';
+        if (!entered) return;
+
+        const submitBtn = pinForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+            const correctPin = await getSecurityPin();
+            if (correctPin && entered === correctPin) {
+                localStorage.setItem('tooyenkung_pin_auth', 'true');
+                if (pinLockScreen) pinLockScreen.classList.add('hidden');
+                if (pinError) pinError.classList.add('hidden');
+                startRealtimeListeners();
+            } else {
+                if (pinError) pinError.classList.remove('hidden');
+                if (pinInput) {
+                    pinInput.value = '';
+                    pinInput.focus();
+                }
             }
+        } catch (err) {
+            console.error("PIN authentication check error:", err);
+            if (pinError) pinError.classList.remove('hidden');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
         }
     });
 }
@@ -884,10 +913,10 @@ function setupEventListeners() {
         refreshBtn.addEventListener('click', () => {
             const icon = refreshBtn.querySelector('i');
             if (icon) icon.classList.add('fa-spin');
+            showToast("กำลังรีโหลดแอป...");
             setTimeout(() => {
-                if (icon) icon.classList.remove('fa-spin');
-                showToast("อัปเดตข้อมูลสดแล้ว");
-            }, 500);
+                window.location.reload();
+            }, 250);
         });
     }
     
