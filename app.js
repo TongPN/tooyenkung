@@ -105,8 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set default dates to today
     const todayStr = getFormattedDate(new Date());
-    inputPurchase.value = todayStr;
-    inputExpiry.value = todayStr;
+    if (inputPurchase) inputPurchase.value = todayStr;
+    if (inputExpiry) inputExpiry.value = todayStr;
 });
 
 // --- Family PIN Authentication ---
@@ -114,27 +114,33 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkFamilyPinAuth() {
     const isAuth = localStorage.getItem('tooyenkung_pin_auth');
     if (isAuth === 'true') {
-        pinLockScreen.classList.add('hidden');
+        if (pinLockScreen) pinLockScreen.classList.add('hidden');
         startRealtimeListeners();
     } else {
-        pinLockScreen.classList.remove('hidden');
-        pinInput.focus();
+        if (pinLockScreen) {
+            pinLockScreen.classList.remove('hidden');
+            if (pinInput) pinInput.focus();
+        }
     }
 }
 
-pinForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (pinInput.value === FAMILY_PIN) {
-        localStorage.setItem('tooyenkung_pin_auth', 'true');
-        pinLockScreen.classList.add('hidden');
-        pinError.classList.add('hidden');
-        startRealtimeListeners();
-    } else {
-        pinError.classList.remove('hidden');
-        pinInput.value = '';
-        pinInput.focus();
-    }
-});
+if (pinForm) {
+    pinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (pinInput && pinInput.value === FAMILY_PIN) {
+            localStorage.setItem('tooyenkung_pin_auth', 'true');
+            if (pinLockScreen) pinLockScreen.classList.add('hidden');
+            if (pinError) pinError.classList.add('hidden');
+            startRealtimeListeners();
+        } else {
+            if (pinError) pinError.classList.remove('hidden');
+            if (pinInput) {
+                pinInput.value = '';
+                pinInput.focus();
+            }
+        }
+    });
+}
 
 function startRealtimeListeners() {
     listenToUnits();
@@ -144,24 +150,24 @@ function startRealtimeListeners() {
 // --- Tab Switching Logic ---
 
 function setupTabNavigation() {
-    tabInventoryBtn.addEventListener('click', () => switchTab('inventory'));
-    tabHistoryBtn.addEventListener('click', () => switchTab('history'));
+    if (tabInventoryBtn) tabInventoryBtn.addEventListener('click', () => switchTab('inventory'));
+    if (tabHistoryBtn) tabHistoryBtn.addEventListener('click', () => switchTab('history'));
 }
 
 function switchTab(tab) {
     currentTab = tab;
     if (tab === 'inventory') {
-        tabInventoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-blue-600 bg-white shadow-xs transition-all flex items-center justify-center";
-        tabHistoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center bg-transparent";
-        inventorySection.classList.remove('hidden');
-        historySection.classList.add('hidden');
-        openAddModalBtn.classList.remove('hidden');
+        if (tabInventoryBtn) tabInventoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-blue-600 bg-white shadow-xs transition-all flex items-center justify-center";
+        if (tabHistoryBtn) tabHistoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center bg-transparent";
+        if (inventorySection) inventorySection.classList.remove('hidden');
+        if (historySection) historySection.classList.add('hidden');
+        if (openAddModalBtn) openAddModalBtn.classList.remove('hidden');
     } else {
-        tabHistoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-blue-600 bg-white shadow-xs transition-all flex items-center justify-center";
-        tabInventoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center bg-transparent";
-        inventorySection.classList.add('hidden');
-        historySection.classList.remove('hidden');
-        openAddModalBtn.classList.add('hidden');
+        if (tabHistoryBtn) tabHistoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-blue-600 bg-white shadow-xs transition-all flex items-center justify-center";
+        if (tabInventoryBtn) tabInventoryBtn.className = "flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-all flex items-center justify-center bg-transparent";
+        if (inventorySection) inventorySection.classList.add('hidden');
+        if (historySection) historySection.classList.remove('hidden');
+        if (openAddModalBtn) openAddModalBtn.classList.add('hidden');
         renderHistoryFeed();
     }
 }
@@ -171,44 +177,50 @@ function switchTab(tab) {
 function listenToInventory() {
     showLoading(true);
     db.collection('inventory').onSnapshot((snapshot) => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
+        try {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
 
-        const activeItems = [];
-        const rawAll = [];
+            const activeItems = [];
+            const rawAll = [];
 
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const itemObj = {
-                ID: doc.id,
-                id: doc.id,
-                ...data
-            };
-            rawAll.push(itemObj);
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const itemObj = {
+                    ID: doc.id,
+                    id: doc.id,
+                    ...data
+                };
+                rawAll.push(itemObj);
 
-            // Filter active/low items
-            if (data.Status !== 'Depleted') {
-                const expiryDate = new Date(data.Expiry_Date);
-                const diffTime = expiryDate - now;
-                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                activeItems.push({
-                    ...itemObj,
-                    daysLeft
-                });
-            }
-        });
+                // Filter active/low items
+                if (data.Status !== 'Depleted') {
+                    const expiryDate = new Date(data.Expiry_Date);
+                    const diffTime = expiryDate - now;
+                    const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    activeItems.push({
+                        ...itemObj,
+                        daysLeft
+                    });
+                }
+            });
 
-        // Sort items by Expiry_Date (closest expiry first)
-        activeItems.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
-        inventory = activeItems;
-        allInventory = rawAll;
+            // Sort items by Expiry_Date (closest expiry first)
+            activeItems.sort((a, b) => new Date(a.Expiry_Date) - new Date(b.Expiry_Date));
+            inventory = activeItems;
+            allInventory = rawAll;
 
-        // Update active badge count
-        badgeActiveCount.textContent = inventory.length;
+            // Update badge counts safely
+            if (badgeActiveCount) badgeActiveCount.textContent = inventory.length;
 
-        renderItems();
-        renderHistoryFeed();
-        showLoading(false);
+            renderItems();
+            renderHistoryFeed();
+        } catch (err) {
+            console.error("Error processing inventory snapshot:", err);
+        } finally {
+            // Guaranteed to hide loading indicator
+            showLoading(false);
+        }
     }, (error) => {
         console.error("Firestore inventory listener error:", error);
         showLoading(false);
@@ -226,7 +238,7 @@ function listenToUnits() {
             db.collection('settings').doc('units').set({ list: DEFAULT_UNITS }, { merge: true });
         }
         saveUnitsLocal(units);
-        populateUnitSelect(inputUnit.value);
+        if (inputUnit) populateUnitSelect(inputUnit.value);
         renderUnitsList();
     }, (error) => {
         console.error("Firestore units listener error:", error);
@@ -241,6 +253,7 @@ function saveUnitsLocal(unitsList) {
 }
 
 function populateUnitSelect(selectedVal) {
+    if (!inputUnit) return;
     inputUnit.innerHTML = '';
     
     if (selectedVal && !units.includes(selectedVal)) {
@@ -268,12 +281,15 @@ function populateUnitSelect(selectedVal) {
 
 function openUnitsModal() {
     renderUnitsList();
-    newUnitInput.value = '';
-    unitsModal.classList.remove('hidden');
-    setTimeout(() => newUnitInput.focus(), 150);
+    if (newUnitInput) newUnitInput.value = '';
+    if (unitsModal) {
+        unitsModal.classList.remove('hidden');
+        setTimeout(() => newUnitInput && newUnitInput.focus(), 150);
+    }
 }
 
 function renderUnitsList() {
+    if (!unitsListContainer) return;
     unitsListContainer.innerHTML = '';
     
     if (units.length === 0) {
@@ -283,9 +299,9 @@ function renderUnitsList() {
     
     units.forEach((u) => {
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100';
+        row.className = 'flex justify-between items-center bg-gray-50 px-3.5 py-2.5 rounded-xl border border-gray-100';
         row.innerHTML = `
-            <span class="font-medium text-gray-800">${u}</span>
+            <span class="font-bold text-gray-800 text-sm">${u}</span>
             <div class="flex items-center space-x-2">
                 <button type="button" onclick="editUnitName('${u}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-blue-600 bg-blue-50 active:bg-blue-100" title="แก้ไขชื่อ">
                     <i class="fa-solid fa-pen text-xs"></i>
@@ -300,6 +316,7 @@ function renderUnitsList() {
 }
 
 async function addNewUnit() {
+    if (!newUnitInput) return;
     const name = newUnitInput.value.trim();
     if (!name) return;
     
@@ -353,24 +370,29 @@ async function deleteUnitName(name) {
     }
 }
 
-// --- UI Rendering: Inventory Cards (Clean & Responsive) ---
+// --- UI Rendering: Inventory Cards (Comfortable Width, Never Squeezed) ---
 
 function renderItems() {
+    if (!itemsContainer) return;
     itemsContainer.innerHTML = '';
     
     if (inventory.length === 0) {
         itemsContainer.classList.add('hidden');
-        emptyState.classList.remove('hidden');
-        emptyState.style.display = 'flex';
+        if (emptyState) {
+            emptyState.classList.remove('hidden');
+            emptyState.style.display = 'flex';
+        }
         return;
     }
     
-    emptyState.style.display = 'none';
-    emptyState.classList.add('hidden');
+    if (emptyState) {
+        emptyState.style.display = 'none';
+        emptyState.classList.add('hidden');
+    }
     itemsContainer.classList.remove('hidden');
     
     inventory.forEach(item => {
-        // Color coding
+        // Expiry color badge
         let colorClass = "bg-green-100 text-green-800 border-green-200";
         let icon = "fa-check-circle text-green-500";
         let statusText = `${item.daysLeft} วัน`;
@@ -394,74 +416,69 @@ function renderItems() {
         const usedCount = item.usedCount || 0;
         const isDiscrete = isDiscreteUnit(item.Unit);
         
-        // Smart Action Buttons (No history button on card - moved to dedicated tab)
+        // Action buttons with whitespace-nowrap so text NEVER wraps onto multiple lines
         let actionButtonsHtml = '';
         if (isDiscrete) {
             actionButtonsHtml = `
-                <button onclick="openConsumeModal('${item.ID}')" class="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 rounded-xl text-xs font-bold active:bg-blue-200 transition-colors" title="ระบุจำนวนที่ใช้">
+                <button type="button" onclick="openConsumeModal('${item.ID}')" class="whitespace-nowrap px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 rounded-xl text-xs font-bold active:bg-blue-200 transition-colors" title="ระบุจำนวนที่ใช้">
                     ระบุจำนวน
                 </button>
-                <button onclick="quickConsumeOne('${item.ID}')" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center active:bg-blue-800 transition-colors" title="หยิบใช้ 1 ${item.Unit}">
+                <button type="button" onclick="quickConsumeOne('${item.ID}')" class="whitespace-nowrap px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center active:bg-blue-800 transition-colors" title="หยิบใช้ 1 ${item.Unit}">
                     <i class="fa-solid fa-minus mr-1 text-[10px]"></i>1 ${item.Unit}
                 </button>
             `;
         } else {
             actionButtonsHtml = `
-                <button onclick="openConsumeModal('${item.ID}')" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center active:bg-blue-800 transition-colors" title="หยิบใช้">
+                <button type="button" onclick="openConsumeModal('${item.ID}')" class="whitespace-nowrap px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center active:bg-blue-800 transition-colors" title="หยิบใช้">
                     <i class="fa-solid fa-utensils mr-1.5 text-xs"></i>หยิบใช้ (${item.Unit})
                 </button>
             `;
         }
         
         const card = document.createElement('div');
-        card.className = `bg-white p-4 rounded-2xl shadow-xs border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow`;
+        card.className = `bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xs border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow`;
         card.innerHTML = `
             <div>
+                <!-- Top Header: Item Name & Expiry Badge -->
                 <div class="flex justify-between items-start mb-2">
-                    <div class="pr-2">
-                        <h3 class="font-bold text-base sm:text-lg text-gray-800 leading-snug line-clamp-1" title="${item.Item_Name}">${item.Item_Name}</h3>
+                    <div class="pr-2 min-w-0 flex-1">
+                        <h3 class="font-bold text-lg sm:text-xl text-gray-800 leading-tight truncate" title="${item.Item_Name}">${item.Item_Name}</h3>
                         <p class="text-xs text-gray-400 mt-0.5">${item.Category || 'ทั่วไป'}</p>
                     </div>
-                    <div class="${colorClass} px-2.5 py-1 rounded-full text-[11px] font-bold border flex items-center shadow-xs flex-shrink-0">
+                    <div class="${colorClass} px-2.5 py-1 rounded-full text-xs font-bold border flex items-center shadow-xs flex-shrink-0 whitespace-nowrap">
                         <i class="fa-solid ${icon} mr-1"></i>
                         ${statusText}
                     </div>
                 </div>
 
-                <div class="text-xs text-gray-500 font-medium flex items-center my-1.5">
+                <!-- Purchase Date Info -->
+                <div class="text-xs text-gray-500 font-medium flex items-center my-2 whitespace-nowrap">
                     <i class="fa-solid fa-cart-shopping mr-1.5 text-blue-500"></i>ซื้อเมื่อ: <span class="font-semibold text-gray-700 ml-1">${item.Purchase_Date || '-'}</span>
                 </div>
             </div>
             
-            <div>
-                <!-- Quantity & Consumption Bar -->
-                <div class="bg-gray-50 px-3 py-2.5 rounded-xl my-2 border border-gray-100">
-                    <div class="flex justify-between items-center mb-2">
-                        <div>
-                            <span class="text-[11px] font-medium text-gray-400">คงเหลือในตู้</span>
-                            <div class="text-lg font-black text-gray-800 leading-tight">
-                                ${item.Remaining_Qty} <span class="text-xs font-normal text-gray-500">${item.Unit}</span>
-                            </div>
+            <div class="mt-2">
+                <!-- Quantity & Consumption Bar (Designed to never wrap awkwardly) -->
+                <div class="bg-gray-50/90 px-3.5 py-3 rounded-2xl border border-gray-100 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <span class="text-[11px] font-semibold text-gray-400 block whitespace-nowrap">คงเหลือในตู้:</span>
+                        <div class="text-xl sm:text-2xl font-black text-gray-800 leading-none mt-0.5 whitespace-nowrap">
+                            ${item.Remaining_Qty} <span class="text-xs font-medium text-gray-500">${item.Unit}</span>
                         </div>
-                        ${usedCount > 0 ? `
-                            <div class="text-right">
-                                <span class="text-[10px] text-gray-400">ใช้ไปแล้ว</span>
-                                <div class="text-xs font-bold text-orange-600">${usedCount} ${item.Unit}</div>
-                            </div>
-                        ` : ''}
+                        ${usedCount > 0 ? `<div class="text-[11px] font-bold text-orange-600 mt-1 whitespace-nowrap">ใช้ไปแล้ว: ${usedCount} ${item.Unit}</div>` : ''}
                     </div>
                     
-                    <div class="flex items-center justify-end space-x-1.5 pt-1 border-t border-gray-200/50">
+                    <div class="flex items-center space-x-1.5 flex-shrink-0">
                         ${actionButtonsHtml}
                     </div>
                 </div>
                 
                 <!-- Quick Actions (Edit / Deplete) -->
-                <div class="flex justify-between pt-1 border-t border-gray-100">
-                    <button onclick="editItem('${item.ID}')" class="text-blue-600 hover:text-blue-700 font-bold py-1.5 px-3 bg-blue-50/70 hover:bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100 text-xs transition-colors">
+                <div class="flex justify-between pt-2.5 mt-1 border-t border-gray-100">
+                    <button type="button" onclick="editItem('${item.ID}')" class="text-blue-600 hover:text-blue-700 font-bold py-2 px-3 bg-blue-50/60 hover:bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100 text-xs transition-colors">
                         <i class="fa-solid fa-pen-to-square mr-1.5"></i> แก้ไข
                     </button>
-                    <button onclick="markDepleted('${item.ID}')" class="text-gray-500 hover:text-gray-700 font-bold py-1.5 px-3 bg-gray-100 hover:bg-gray-200/70 rounded-xl w-[48%] flex justify-center items-center active:bg-gray-200 text-xs transition-colors">
+                    <button type="button" onclick="markDepleted('${item.ID}')" class="text-gray-500 hover:text-gray-700 font-bold py-2 px-3 bg-gray-100/80 hover:bg-gray-200/70 rounded-xl w-[48%] flex justify-center items-center active:bg-gray-200 text-xs transition-colors">
                         <i class="fa-solid fa-trash mr-1.5"></i> หมดแล้ว
                     </button>
                 </div>
@@ -474,6 +491,8 @@ function renderItems() {
 // --- UI Rendering: Dedicated History Tab Feed ---
 
 function renderHistoryFeed() {
+    if (!historyFeedContainer) return;
+    
     // Compile history logs across ALL items (including depleted items)
     const allLogs = [];
     
@@ -493,18 +512,22 @@ function renderHistoryFeed() {
         }
     });
 
-    // Update history badge count
-    badgeHistoryCount.textContent = allLogs.length;
+    // Update history badge count safely
+    if (badgeHistoryCount) badgeHistoryCount.textContent = allLogs.length;
 
     if (allLogs.length === 0) {
         historyFeedContainer.classList.add('hidden');
-        historyEmptyState.classList.remove('hidden');
-        historyEmptyState.style.display = 'flex';
+        if (historyEmptyState) {
+            historyEmptyState.classList.remove('hidden');
+            historyEmptyState.style.display = 'flex';
+        }
         return;
     }
 
-    historyEmptyState.style.display = 'none';
-    historyEmptyState.classList.add('hidden');
+    if (historyEmptyState) {
+        historyEmptyState.style.display = 'none';
+        historyEmptyState.classList.add('hidden');
+    }
     historyFeedContainer.classList.remove('hidden');
     historyFeedContainer.innerHTML = '';
 
@@ -543,7 +566,7 @@ function renderHistoryFeed() {
                 <div class="text-xs text-gray-500 mt-0.5">
                     หมวด: <span class="font-medium text-gray-700">${log.category || 'ทั่วไป'}</span>
                 </div>
-                <div class="text-xs font-semibold text-gray-700 mt-1.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                <div class="text-xs font-semibold text-gray-700 mt-1.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
                     ${log.note || `${actionLabel} ${log.amount || ''} ${log.unit || ''}`}
                 </div>
             </div>
@@ -565,22 +588,25 @@ function openConsumeModal(id) {
     if (!item) return;
 
     currentConsumeItem = item;
-    consumeItemId.value = item.ID;
-    consumeItemTitle.textContent = `หยิบใช้: ${item.Item_Name}`;
-    consumeCurrentStockText.textContent = `คงเหลือปัจจุบัน: ${item.Remaining_Qty} ${item.Unit}`;
-    consumeUnitLabel.textContent = item.Unit;
-    consumeUnitSuffix.textContent = item.Unit;
-    consumeAmountInput.value = '';
-    consumeNoteInput.value = '';
+    if (consumeItemId) consumeItemId.value = item.ID;
+    if (consumeItemTitle) consumeItemTitle.textContent = `หยิบใช้: ${item.Item_Name}`;
+    if (consumeCurrentStockText) consumeCurrentStockText.textContent = `คงเหลือปัจจุบัน: ${item.Remaining_Qty} ${item.Unit}`;
+    if (consumeUnitLabel) consumeUnitLabel.textContent = item.Unit;
+    if (consumeUnitSuffix) consumeUnitSuffix.textContent = item.Unit;
+    if (consumeAmountInput) consumeAmountInput.value = '';
+    if (consumeNoteInput) consumeNoteInput.value = '';
     updateConsumePreview(0);
 
     renderConsumePresets(item);
 
-    consumeModal.classList.remove('hidden');
-    setTimeout(() => consumeAmountInput.focus(), 150);
+    if (consumeModal) {
+        consumeModal.classList.remove('hidden');
+        setTimeout(() => consumeAmountInput && consumeAmountInput.focus(), 150);
+    }
 }
 
 function renderConsumePresets(item) {
+    if (!consumePresetsContainer) return;
     consumePresetsContainer.innerHTML = '';
     const unit = item.Unit;
     const remaining = parseFloat(item.Remaining_Qty) || 0;
@@ -602,8 +628,10 @@ function renderConsumePresets(item) {
         btn.className = 'px-3 py-1.5 bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-700 font-bold rounded-xl text-xs active:bg-blue-200 transition-colors';
         btn.textContent = `${p} ${unit}`;
         btn.onclick = () => {
-            consumeAmountInput.value = p;
-            updateConsumePreview(p);
+            if (consumeAmountInput) {
+                consumeAmountInput.value = p;
+                updateConsumePreview(p);
+            }
         };
         consumePresetsContainer.appendChild(btn);
     });
@@ -615,8 +643,10 @@ function renderConsumePresets(item) {
         halfBtn.className = 'px-3 py-1.5 bg-blue-50 text-blue-700 font-bold rounded-xl text-xs active:bg-blue-200 transition-colors';
         halfBtn.textContent = `ครึ่งหนึ่ง (${half} ${unit})`;
         halfBtn.onclick = () => {
-            consumeAmountInput.value = half;
-            updateConsumePreview(half);
+            if (consumeAmountInput) {
+                consumeAmountInput.value = half;
+                updateConsumePreview(half);
+            }
         };
         consumePresetsContainer.appendChild(halfBtn);
     }
@@ -626,14 +656,16 @@ function renderConsumePresets(item) {
     allBtn.className = 'px-3 py-1.5 bg-orange-50 text-orange-700 font-bold rounded-xl text-xs active:bg-orange-200 transition-colors';
     allBtn.textContent = `ทั้งหมด (${remaining} ${unit})`;
     allBtn.onclick = () => {
-        consumeAmountInput.value = remaining;
-        updateConsumePreview(remaining);
+        if (consumeAmountInput) {
+            consumeAmountInput.value = remaining;
+            updateConsumePreview(remaining);
+        }
     };
     consumePresetsContainer.appendChild(allBtn);
 }
 
 function updateConsumePreview(enteredAmount) {
-    if (!currentConsumeItem) return;
+    if (!currentConsumeItem || !consumePreviewRemaining) return;
     const remaining = parseFloat(currentConsumeItem.Remaining_Qty) || 0;
     const amount = parseFloat(enteredAmount) || 0;
     const after = Math.round((remaining - amount) * 100) / 100;
@@ -702,12 +734,12 @@ async function executeConsumption(item, amount, noteText) {
 // --- Interactions ---
 
 async function markDepleted(id) {
-    if (!confirm("Confirm mark as depleted?")) return;
+    if (!confirm("ยืนยันว่าใช้ของชิ้นนี้หมดแล้วใช่หรือไม่?")) return;
     
     const backupItem = inventory.find(i => i.ID === id);
     inventory = inventory.filter(i => i.ID !== id);
     renderItems();
-    showToast("Item removed.");
+    showToast("นำออกจากตู้เย็นแล้ว");
     
     try {
         const now = new Date();
@@ -725,7 +757,7 @@ async function markDepleted(id) {
         });
     } catch (error) {
         console.error("Error depleting item in Firestore:", error);
-        showToast("Failed to remove item.");
+        showToast("ไม่สามารถอัปเดตได้");
         if (backupItem) {
             inventory.push(backupItem);
             renderItems();
@@ -737,112 +769,133 @@ function editItem(id) {
     const item = inventory.find(i => i.ID === id);
     if (!item) return;
     
-    modalTitle.textContent = "Edit Item";
-    inputId.value = item.ID;
-    inputName.value = item.Item_Name;
-    inputQty.value = item.Remaining_Qty;
+    if (modalTitle) modalTitle.textContent = "แก้ไขข้อมูล";
+    if (inputId) inputId.value = item.ID;
+    if (inputName) inputName.value = item.Item_Name;
+    if (inputQty) inputQty.value = item.Remaining_Qty;
     
     populateUnitSelect(item.Unit);
     
-    if (item.Purchase_Date) {
-        inputPurchase.value = item.Purchase_Date;
-    } else {
-        inputPurchase.value = getFormattedDate(new Date());
+    if (inputPurchase) {
+        inputPurchase.value = item.Purchase_Date || getFormattedDate(new Date());
     }
 
-    if (item.Expiry_Date) {
+    if (inputExpiry && item.Expiry_Date) {
         const d = new Date(item.Expiry_Date);
         inputExpiry.value = getFormattedDate(d);
     }
     
     selectCategoryChip(item.Category);
-    itemModal.classList.remove('hidden');
+    if (itemModal) itemModal.classList.remove('hidden');
 }
 
 // --- Event Listeners ---
 
 function setupEventListeners() {
-    refreshBtn.addEventListener('click', () => {
-        refreshBtn.querySelector('i').classList.add('fa-spin');
-        setTimeout(() => {
-            refreshBtn.querySelector('i').classList.remove('fa-spin');
-            showToast("อัปเดตข้อมูลสดแล้ว");
-        }, 500);
-    });
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            const icon = refreshBtn.querySelector('i');
+            if (icon) icon.classList.add('fa-spin');
+            setTimeout(() => {
+                if (icon) icon.classList.remove('fa-spin');
+                showToast("อัปเดตข้อมูลสดแล้ว");
+            }, 500);
+        });
+    }
     
-    openAddModalBtn.addEventListener('click', () => {
-        resetForm();
-        modalTitle.textContent = "Add to Fridge";
-        populateUnitSelect();
-        itemModal.classList.remove('hidden');
-    });
+    if (openAddModalBtn) {
+        openAddModalBtn.addEventListener('click', () => {
+            resetForm();
+            if (modalTitle) modalTitle.textContent = "Add to Fridge";
+            populateUnitSelect();
+            if (itemModal) itemModal.classList.remove('hidden');
+        });
+    }
     
-    closeModalBtn.addEventListener('click', () => {
-        itemModal.classList.add('hidden');
-    });
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+            if (itemModal) itemModal.classList.add('hidden');
+        });
+    }
 
-    closeConsumeModalBtn.addEventListener('click', () => {
-        consumeModal.classList.add('hidden');
-        currentConsumeItem = null;
-    });
+    if (closeConsumeModalBtn) {
+        closeConsumeModalBtn.addEventListener('click', () => {
+            if (consumeModal) consumeModal.classList.add('hidden');
+            currentConsumeItem = null;
+        });
+    }
 
     // Live preview when typing amount to use
-    consumeAmountInput.addEventListener('input', () => {
-        updateConsumePreview(consumeAmountInput.value);
-    });
+    if (consumeAmountInput) {
+        consumeAmountInput.addEventListener('input', () => {
+            updateConsumePreview(consumeAmountInput.value);
+        });
+    }
 
     // Consume form submit
-    consumeForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        if (!currentConsumeItem) return;
+    if (consumeForm) {
+        consumeForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!currentConsumeItem) return;
 
-        const amount = parseFloat(consumeAmountInput.value);
-        if (isNaN(amount) || amount <= 0) {
-            showToast("กรุณากรอกจำนวนที่ใช้ให้ถูกต้อง");
-            return;
-        }
+            const amount = parseFloat(consumeAmountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                showToast("กรุณากรอกจำนวนที่ใช้ให้ถูกต้อง");
+                return;
+            }
 
-        const remaining = parseFloat(currentConsumeItem.Remaining_Qty) || 0;
-        if (amount > remaining) {
-            showToast(`จำนวนเกินสต็อกคงเหลือ (${remaining} ${currentConsumeItem.Unit})`);
-            return;
-        }
+            const remaining = parseFloat(currentConsumeItem.Remaining_Qty) || 0;
+            if (amount > remaining) {
+                showToast(`จำนวนเกินสต็อกคงเหลือ (${remaining} ${currentConsumeItem.Unit})`);
+                return;
+            }
 
-        const note = consumeNoteInput.value.trim();
-        const noteText = note 
-            ? `หยิบใช้ ${amount} ${currentConsumeItem.Unit} (${note})` 
-            : `หยิบใช้ ${amount} ${currentConsumeItem.Unit}`;
+            const note = consumeNoteInput ? consumeNoteInput.value.trim() : '';
+            const noteText = note 
+                ? `หยิบใช้ ${amount} ${currentConsumeItem.Unit} (${note})` 
+                : `หยิบใช้ ${amount} ${currentConsumeItem.Unit}`;
 
-        consumeModal.classList.add('hidden');
-        executeConsumption(currentConsumeItem, amount, noteText);
-        currentConsumeItem = null;
-    });
+            if (consumeModal) consumeModal.classList.add('hidden');
+            executeConsumption(currentConsumeItem, amount, noteText);
+            currentConsumeItem = null;
+        });
+    }
     
     // Unit modal triggers
-    manageUnitsBtn.addEventListener('click', () => {
-        openUnitsModal();
-    });
-    
-    closeUnitsModalBtn.addEventListener('click', () => {
-        unitsModal.classList.add('hidden');
-    });
-    
-    addNewUnitBtn.addEventListener('click', () => {
-        addNewUnit();
-    });
-    
-    newUnitInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addNewUnit();
-        }
-    });
-    
-    inputUnit.addEventListener('change', () => {
-        if (inputUnit.value === '__ADD_NEW__') {
+    if (manageUnitsBtn) {
+        manageUnitsBtn.addEventListener('click', () => {
             openUnitsModal();
-        }
-    });
+        });
+    }
+    
+    if (closeUnitsModalBtn) {
+        closeUnitsModalBtn.addEventListener('click', () => {
+            if (unitsModal) unitsModal.classList.add('hidden');
+        });
+    }
+    
+    if (addNewUnitBtn) {
+        addNewUnitBtn.addEventListener('click', () => {
+            addNewUnit();
+        });
+    }
+    
+    if (newUnitInput) {
+        newUnitInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addNewUnit();
+            }
+        });
+    }
+    
+    if (inputUnit) {
+        inputUnit.addEventListener('change', () => {
+            if (inputUnit.value === '__ADD_NEW__') {
+                openUnitsModal();
+            }
+        });
+    }
     
     // Category Chips
     document.querySelectorAll('.category-chip').forEach(chip => {
@@ -855,83 +908,85 @@ function setupEventListeners() {
     // Expiry Presets
     document.querySelectorAll('.expiry-preset').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const days = parseInt(e.target.getAttribute('data-days'));
-            const baseDate = inputPurchase.value ? new Date(inputPurchase.value) : new Date();
+            const days = parseInt(btn.getAttribute('data-days'));
+            const baseDate = (inputPurchase && inputPurchase.value) ? new Date(inputPurchase.value) : new Date();
             baseDate.setDate(baseDate.getDate() + days);
-            inputExpiry.value = getFormattedDate(baseDate);
+            if (inputExpiry) inputExpiry.value = getFormattedDate(baseDate);
         });
     });
     
     // Form Submit (Save to Firestore)
-    itemForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const isUpdate = !!inputId.value;
-        const submitText = saveItemBtn.querySelector('span');
-        submitText.textContent = "Saving...";
-        saveSpinner.classList.remove('hidden');
-        saveItemBtn.disabled = true;
-        
-        const qtyNum = parseFloat(inputQty.value) || 1;
-        const unitVal = inputUnit.value || 'ชิ้น';
-        const purchaseVal = inputPurchase.value || getFormattedDate(new Date());
-
-        const formData = {
-            Item_Name: inputName.value.trim(),
-            Category: inputCategory.value || 'อื่นๆ',
-            Remaining_Qty: qtyNum,
-            Unit: unitVal,
-            Purchase_Date: purchaseVal,
-            Expiry_Date: inputExpiry.value
-        };
-        
-        try {
-            if (isUpdate) {
-                await db.collection('inventory').doc(inputId.value).update({
-                    ...formData,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                showToast("Item updated!");
-            } else {
-                const now = new Date();
-                formData.Status = 'Active';
-                formData.Initial_Qty = qtyNum;
-                formData.usedCount = 0;
-                formData.history = [{
-                    date: now.toISOString(),
-                    displayDate: formatDisplayTime(now),
-                    action: 'create',
-                    amount: qtyNum,
-                    note: `นำเข้าตู้เย็น ${qtyNum} ${unitVal} (ซื้อเมื่อ ${purchaseVal})`
-                }];
-                formData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                formData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-                
-                await db.collection('inventory').add(formData);
-                showToast("Item added!");
-            }
+    if (itemForm) {
+        itemForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            itemModal.classList.add('hidden');
-        } catch (error) {
-            console.error("Error saving to Firestore:", error);
-            showToast("Failed to save item.");
-        } finally {
-            submitText.textContent = "Save to Fridge";
-            saveSpinner.classList.add('hidden');
-            saveItemBtn.disabled = false;
-        }
-    });
+            const isUpdate = !!(inputId && inputId.value);
+            const submitText = saveItemBtn ? saveItemBtn.querySelector('span') : null;
+            if (submitText) submitText.textContent = "Saving...";
+            if (saveSpinner) saveSpinner.classList.remove('hidden');
+            if (saveItemBtn) saveItemBtn.disabled = true;
+            
+            const qtyNum = parseFloat(inputQty.value) || 1;
+            const unitVal = inputUnit ? inputUnit.value || 'ชิ้น' : 'ชิ้น';
+            const purchaseVal = (inputPurchase && inputPurchase.value) ? inputPurchase.value : getFormattedDate(new Date());
+
+            const formData = {
+                Item_Name: inputName ? inputName.value.trim() : 'วัตถุดิบ',
+                Category: inputCategory ? inputCategory.value || 'อื่นๆ' : 'อื่นๆ',
+                Remaining_Qty: qtyNum,
+                Unit: unitVal,
+                Purchase_Date: purchaseVal,
+                Expiry_Date: inputExpiry ? inputExpiry.value : getFormattedDate(new Date())
+            };
+            
+            try {
+                if (isUpdate) {
+                    await db.collection('inventory').doc(inputId.value).update({
+                        ...formData,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    showToast("แก้ไขข้อมูลเรียบร้อย!");
+                } else {
+                    const now = new Date();
+                    formData.Status = 'Active';
+                    formData.Initial_Qty = qtyNum;
+                    formData.usedCount = 0;
+                    formData.history = [{
+                        date: now.toISOString(),
+                        displayDate: formatDisplayTime(now),
+                        action: 'create',
+                        amount: qtyNum,
+                        note: `นำเข้าตู้เย็น ${qtyNum} ${unitVal} (ซื้อเมื่อ ${purchaseVal})`
+                    }];
+                    formData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    formData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                    
+                    await db.collection('inventory').add(formData);
+                    showToast("บันทึกเข้าตู้เย็นแล้ว!");
+                }
+                
+                if (itemModal) itemModal.classList.add('hidden');
+            } catch (error) {
+                console.error("Error saving to Firestore:", error);
+                showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
+            } finally {
+                if (submitText) submitText.textContent = "Save to Fridge";
+                if (saveSpinner) saveSpinner.classList.add('hidden');
+                if (saveItemBtn) saveItemBtn.disabled = false;
+                // Guaranteed safety: loading indicator is ALWAYS hidden
+                showLoading(false);
+            }
+        });
+    }
 }
 
 // --- Helpers ---
 
 function showLoading(show) {
+    if (!loadingIndicator) return;
     if (show) {
         loadingIndicator.style.display = 'flex';
         loadingIndicator.classList.remove('hidden');
-        itemsContainer.classList.add('hidden');
-        emptyState.style.display = 'none';
-        emptyState.classList.add('hidden');
     } else {
         loadingIndicator.style.display = 'none';
         loadingIndicator.classList.add('hidden');
@@ -939,6 +994,7 @@ function showLoading(show) {
 }
 
 function showToast(message) {
+    if (!toast) return;
     toast.textContent = message;
     toast.classList.remove('opacity-0', 'pointer-events-none');
     setTimeout(() => {
@@ -969,7 +1025,7 @@ function formatDisplayTime(date) {
 }
 
 function selectCategoryChip(val) {
-    inputCategory.value = val;
+    if (inputCategory) inputCategory.value = val;
     document.querySelectorAll('.category-chip').forEach(chip => {
         if (chip.getAttribute('data-val') === val) {
             chip.classList.remove('bg-gray-100', 'text-gray-700');
@@ -982,18 +1038,18 @@ function selectCategoryChip(val) {
 }
 
 function resetForm() {
-    inputId.value = '';
-    inputName.value = '';
-    inputQty.value = '1';
+    if (inputId) inputId.value = '';
+    if (inputName) inputName.value = '';
+    if (inputQty) inputQty.value = '1';
     
     const todayStr = getFormattedDate(new Date());
-    inputPurchase.value = todayStr;
-    inputExpiry.value = todayStr;
+    if (inputPurchase) inputPurchase.value = todayStr;
+    if (inputExpiry) inputExpiry.value = todayStr;
     
     populateUnitSelect();
     
     // Deselect all chips
-    inputCategory.value = '';
+    if (inputCategory) inputCategory.value = '';
     document.querySelectorAll('.category-chip').forEach(chip => {
         chip.classList.add('bg-gray-100', 'text-gray-700');
         chip.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');

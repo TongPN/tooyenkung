@@ -58,7 +58,7 @@
 
     <!-- Header -->
     <header class="bg-white shadow-xs sticky top-0 z-20 border-b border-gray-100">
-        <div class="max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+        <div class="max-w-5xl mx-auto px-4 py-3.5 flex justify-between items-center">
             <div class="flex items-center space-x-2.5">
                 <h1 class="text-xl md:text-2xl font-black text-blue-600 tracking-tight flex items-center">
                     <i class="fa-solid fa-snowflake mr-2 text-blue-500"></i>TooYenKung
@@ -74,8 +74,8 @@
     </header>
 
     <!-- Tab Switcher Navigation Bar (Responsive & Clean) -->
-    <div class="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-[57px] md:top-[65px] z-10">
-        <div class="max-w-6xl mx-auto px-4 py-2">
+    <div class="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-[57px] md:top-[65px] z-10">
+        <div class="max-w-5xl mx-auto px-4 py-2">
             <div class="flex bg-gray-100 p-1 rounded-2xl max-w-md mx-auto">
                 <button id="tabInventoryBtn" class="flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm text-blue-600 bg-white shadow-xs transition-all flex items-center justify-center">
                     <i class="fa-solid fa-snowflake mr-1.5 sm:mr-2"></i>ของในตู้เย็น
@@ -89,19 +89,19 @@
         </div>
     </div>
 
-    <!-- Main Content Container -->
-    <main class="max-w-6xl mx-auto p-4 md:p-6" id="mainContent">
+    <!-- Main Content Container (Max width 5xl for perfect 3-column readability on Laptop/MacBook) -->
+    <main class="max-w-5xl mx-auto p-4 md:p-6" id="mainContent">
         
         <!-- ================= TAB 1: INVENTORY SECTION ================= -->
         <section id="inventorySection">
             <!-- Loading State -->
-            <div id="loadingIndicator" class="flex flex-col items-center justify-center py-16 text-gray-400">
+            <div id="loadingIndicator" class="hidden flex-col items-center justify-center py-16 text-gray-400">
                 <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-4 text-blue-500"></i>
                 <p>กำลังโหลดของในตู้เย็น...</p>
             </div>
             
-            <!-- Responsive Grid for Items (Mobile: 1 col, Tablet/iPad: 2 cols, Laptop: 3 cols, Desktop: 4 cols) -->
-            <div id="itemsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 hidden"></div>
+            <!-- Responsive Grid for Items (Max 3 columns: Mobile: 1 col, Tablet/iPad: 2 cols, Laptop/MacBook: 3 cols) -->
+            <div id="itemsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
             
             <!-- Empty State -->
             <div id="emptyState" class="hidden flex-col items-center justify-center py-16 text-gray-400 text-center">
@@ -324,6 +324,7 @@
         Message goes here
     </div>
 
-    <script src="app.js"></script>
+    <!-- Cache-busting script version to ensure latest JS is always fetched -->
+    <script src="app.js?v=2.2"></script>
 </body>
 </html>
