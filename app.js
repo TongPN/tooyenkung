@@ -414,35 +414,20 @@ function renderItems() {
         }
         
         const usedCount = item.usedCount || 0;
-        const isDiscrete = isDiscreteUnit(item.Unit);
-        
-        // Action buttons with whitespace-nowrap so text NEVER wraps onto multiple lines
-        let actionButtonsHtml = '';
-        if (isDiscrete) {
-            actionButtonsHtml = `
-                <button type="button" onclick="openConsumeModal('${item.ID}')" class="whitespace-nowrap px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 rounded-xl text-xs font-bold active:bg-blue-200 transition-colors" title="ระบุจำนวนที่ใช้">
-                    ระบุจำนวน
-                </button>
-                <button type="button" onclick="quickConsumeOne('${item.ID}')" class="whitespace-nowrap px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center active:bg-blue-800 transition-colors" title="หยิบใช้ 1 ${item.Unit}">
-                    <i class="fa-solid fa-minus mr-1 text-[10px]"></i>1 ${item.Unit}
-                </button>
-            `;
-        } else {
-            actionButtonsHtml = `
-                <button type="button" onclick="openConsumeModal('${item.ID}')" class="whitespace-nowrap px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center active:bg-blue-800 transition-colors" title="หยิบใช้">
-                    <i class="fa-solid fa-utensils mr-1.5 text-xs"></i>หยิบใช้ (${item.Unit})
-                </button>
-            `;
-        }
         
         const card = document.createElement('div');
         card.className = `bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xs border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow`;
         card.innerHTML = `
             <div>
-                <!-- Top Header: Item Name & Expiry Badge -->
+                <!-- Top Header: Item Name, Edit Button & Expiry Badge -->
                 <div class="flex justify-between items-start mb-2">
                     <div class="pr-2 min-w-0 flex-1">
-                        <h3 class="font-bold text-lg sm:text-xl text-gray-800 leading-tight truncate" title="${item.Item_Name}">${item.Item_Name}</h3>
+                        <div class="flex items-center space-x-1.5">
+                            <h3 class="font-bold text-lg sm:text-xl text-gray-800 leading-tight truncate" title="${item.Item_Name}">${item.Item_Name}</h3>
+                            <button type="button" onclick="editItem('${item.ID}')" class="text-gray-400 hover:text-blue-600 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0" title="แก้ไขข้อมูล">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                            </button>
+                        </div>
                         <p class="text-xs text-gray-400 mt-0.5">${item.Category || 'ทั่วไป'}</p>
                     </div>
                     <div class="${colorClass} px-2.5 py-1 rounded-full text-xs font-bold border flex items-center shadow-xs flex-shrink-0 whitespace-nowrap">
@@ -458,28 +443,36 @@ function renderItems() {
             </div>
             
             <div class="mt-2">
-                <!-- Quantity & Consumption Bar (Designed to never wrap awkwardly) -->
+                <!-- Quantity & Stock Display -->
                 <div class="bg-gray-50/90 px-3.5 py-3 rounded-2xl border border-gray-100 flex items-center justify-between gap-2">
                     <div class="min-w-0">
                         <span class="text-[11px] font-semibold text-gray-400 block whitespace-nowrap">คงเหลือในตู้:</span>
                         <div class="text-xl sm:text-2xl font-black text-gray-800 leading-none mt-0.5 whitespace-nowrap">
                             ${item.Remaining_Qty} <span class="text-xs font-medium text-gray-500">${item.Unit}</span>
                         </div>
-                        ${usedCount > 0 ? `<div class="text-[11px] font-bold text-orange-600 mt-1 whitespace-nowrap">ใช้ไปแล้ว: ${usedCount} ${item.Unit}</div>` : ''}
                     </div>
                     
-                    <div class="flex items-center space-x-1.5 flex-shrink-0">
-                        ${actionButtonsHtml}
-                    </div>
+                    ${usedCount > 0 ? `
+                        <div class="bg-orange-50 border border-orange-200/60 px-2.5 py-1.5 rounded-xl text-right flex-shrink-0">
+                            <span class="text-[10px] text-orange-600/80 block font-medium">ใช้ไปแล้ว</span>
+                            <span class="text-xs font-bold text-orange-700 whitespace-nowrap">${usedCount} ${item.Unit}</span>
+                        </div>
+                    ` : `
+                        <div class="text-right flex-shrink-0">
+                            <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100 flex items-center">
+                                <i class="fa-solid fa-circle-check text-[10px] mr-1"></i>พร้อมใช้
+                            </span>
+                        </div>
+                    `}
                 </div>
                 
-                <!-- Quick Actions (Edit / Deplete) -->
-                <div class="flex justify-between pt-2.5 mt-1 border-t border-gray-100">
-                    <button type="button" onclick="editItem('${item.ID}')" class="text-blue-600 hover:text-blue-700 font-bold py-2 px-3 bg-blue-50/60 hover:bg-blue-50 rounded-xl w-[48%] flex justify-center items-center active:bg-blue-100 text-xs transition-colors">
-                        <i class="fa-solid fa-pen-to-square mr-1.5"></i> แก้ไข
+                <!-- Main Action Buttons: "ใช้" and "ใช้หมดแล้ว" -->
+                <div class="flex items-center space-x-2 pt-3 mt-2 border-t border-gray-100">
+                    <button type="button" onclick="openConsumeModal('${item.ID}')" class="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-xs flex items-center justify-center active:bg-blue-800 transition-all" title="บันทึกการใช้">
+                        <i class="fa-solid fa-utensils mr-2 text-xs"></i>ใช้
                     </button>
-                    <button type="button" onclick="markDepleted('${item.ID}')" class="text-gray-500 hover:text-gray-700 font-bold py-2 px-3 bg-gray-100/80 hover:bg-gray-200/70 rounded-xl w-[48%] flex justify-center items-center active:bg-gray-200 text-xs transition-colors">
-                        <i class="fa-solid fa-trash mr-1.5"></i> หมดแล้ว
+                    <button type="button" onclick="markDepleted('${item.ID}')" class="py-2.5 px-3.5 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 rounded-xl text-xs sm:text-sm font-bold border border-gray-200/80 hover:border-red-200 flex items-center justify-center active:bg-red-100 transition-all whitespace-nowrap" title="บันทึกว่าใช้หมดแล้ว">
+                        <i class="fa-solid fa-check-double mr-1.5 text-xs text-gray-400"></i>ใช้หมดแล้ว
                     </button>
                 </div>
             </div>
@@ -552,6 +545,8 @@ function renderHistoryFeed() {
             actionLabel = 'ใช้หมดแล้ว';
         }
 
+        const logIdentifier = log.id || log.date || '';
+
         const card = document.createElement('div');
         card.className = 'bg-white p-4 rounded-2xl border border-gray-100 shadow-xs hover:shadow-sm transition-shadow flex items-start space-x-3.5';
         card.innerHTML = `
@@ -561,7 +556,12 @@ function renderHistoryFeed() {
             <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-start">
                     <h4 class="font-bold text-gray-800 text-base leading-tight truncate mr-2">${log.itemName}</h4>
-                    <span class="text-[11px] text-gray-400 whitespace-nowrap">${log.displayDate || getFormattedDate(log.date)}</span>
+                    <div class="flex items-center space-x-1.5 flex-shrink-0">
+                        <span class="text-[11px] text-gray-400 whitespace-nowrap">${log.displayDate || getFormattedDate(log.date)}</span>
+                        <button type="button" onclick="deleteHistoryEntry('${log.itemId}', '${logIdentifier}')" class="text-gray-300 hover:text-red-500 hover:bg-red-50 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ml-1" title="ลบประวัตินี้">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="text-xs text-gray-500 mt-0.5">
                     หมวด: <span class="font-medium text-gray-700">${log.category || 'ทั่วไป'}</span>
@@ -573,6 +573,64 @@ function renderHistoryFeed() {
         `;
         historyFeedContainer.appendChild(card);
     });
+}
+
+// --- History Deletion Logic ---
+
+async function deleteHistoryEntry(itemId, logIdentifier) {
+    const item = allInventory.find(i => i.ID === itemId);
+    if (!item) {
+        showToast("ไม่พบข้อมูลวัตถุดิบนี้");
+        return;
+    }
+
+    const log = (item.history || []).find(h => (h.id && h.id === logIdentifier) || h.date === logIdentifier);
+    if (!log) {
+        showToast("ไม่พบรายการประวัตินี้");
+        return;
+    }
+
+    let confirmMsg = `ต้องการลบประวัตินี้ใช่หรือไม่?\n\n"${log.itemName}"\n${log.note || ''}`;
+    let shouldRestoreQty = false;
+
+    // If it was a consumption on an active item, offer to restore stock automatically
+    if (log.action === 'consume' && log.amount && item.Status !== 'Depleted') {
+        confirmMsg += `\n\n(ระบบจะคืนสต็อก ${log.amount} ${item.Unit || ''} กลับเข้าตู้เย็นให้อัตโนมัติ)`;
+        shouldRestoreQty = true;
+    }
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        const updatedHistory = (item.history || []).filter(h => !((h.id && h.id === logIdentifier) || h.date === logIdentifier));
+        const updateData = {
+            history: updatedHistory,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (shouldRestoreQty) {
+            const currentQty = parseFloat(item.Remaining_Qty) || 0;
+            const newQty = Math.round((currentQty + parseFloat(log.amount)) * 100) / 100;
+            const currentUsed = parseFloat(item.usedCount) || 0;
+            const newUsed = Math.max(0, Math.round((currentUsed - parseFloat(log.amount)) * 100) / 100);
+
+            updateData.Remaining_Qty = newQty;
+            updateData.usedCount = newUsed;
+
+            item.Remaining_Qty = newQty;
+            item.usedCount = newUsed;
+        }
+
+        item.history = updatedHistory;
+        renderHistoryFeed();
+        renderItems();
+        showToast("ลบประวัติเรียบร้อยแล้ว");
+
+        await db.collection('inventory').doc(itemId).update(updateData);
+    } catch (err) {
+        console.error("Error deleting history entry:", err);
+        showToast("เกิดข้อผิดพลาดในการลบประวัติ");
+    }
 }
 
 // --- Consumption Logic ---
@@ -593,15 +651,28 @@ function openConsumeModal(id) {
     if (consumeCurrentStockText) consumeCurrentStockText.textContent = `คงเหลือปัจจุบัน: ${item.Remaining_Qty} ${item.Unit}`;
     if (consumeUnitLabel) consumeUnitLabel.textContent = item.Unit;
     if (consumeUnitSuffix) consumeUnitSuffix.textContent = item.Unit;
-    if (consumeAmountInput) consumeAmountInput.value = '';
+    
+    // Default volume is 1 (or remaining if remaining < 1)
+    const remaining = parseFloat(item.Remaining_Qty) || 0;
+    let defaultAmount = 1;
+    if (remaining < 1 && remaining > 0) {
+        defaultAmount = remaining;
+    }
+
+    if (consumeAmountInput) consumeAmountInput.value = defaultAmount;
     if (consumeNoteInput) consumeNoteInput.value = '';
-    updateConsumePreview(0);
+    updateConsumePreview(defaultAmount);
 
     renderConsumePresets(item);
 
     if (consumeModal) {
         consumeModal.classList.remove('hidden');
-        setTimeout(() => consumeAmountInput && consumeAmountInput.focus(), 150);
+        setTimeout(() => {
+            if (consumeAmountInput) {
+                consumeAmountInput.focus();
+                consumeAmountInput.select();
+            }
+        }, 150);
     }
 }
 
@@ -700,7 +771,9 @@ async function executeConsumption(item, amount, noteText) {
     }
 
     const now = new Date();
+    const logId = 'h_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const historyEntry = {
+        id: logId,
         date: now.toISOString(),
         displayDate: formatDisplayTime(now),
         action: 'consume',
@@ -743,7 +816,9 @@ async function markDepleted(id) {
     
     try {
         const now = new Date();
+        const logId = 'h_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
         const depleteEntry = {
+            id: logId,
             date: now.toISOString(),
             displayDate: formatDisplayTime(now),
             action: 'deplete',
@@ -948,10 +1023,12 @@ function setupEventListeners() {
                     showToast("แก้ไขข้อมูลเรียบร้อย!");
                 } else {
                     const now = new Date();
+                    const logId = 'h_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
                     formData.Status = 'Active';
                     formData.Initial_Qty = qtyNum;
                     formData.usedCount = 0;
                     formData.history = [{
+                        id: logId,
                         date: now.toISOString(),
                         displayDate: formatDisplayTime(now),
                         action: 'create',
