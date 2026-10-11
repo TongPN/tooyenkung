@@ -3,6 +3,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxMKeFeshxXhEspKNfZHBCc
 // --- State ---
 let inventory = [];
 const DEFAULT_UNITS = ['ชิ้น', 'กล่อง', 'ขวด', 'ถุง', 'ฟอง', 'แพ็ค', 'กรัม', 'กก.', 'จาน', 'ห่อ'];
+let units = [...DEFAULT_UNITS];
 
 // --- DOM Elements ---
 const refreshBtn = document.getElementById('refreshBtn');
@@ -36,6 +37,7 @@ const unitsListContainer = document.getElementById('unitsListContainer');
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+    units = getUnits();
     populateUnitSelect();
     fetchItems();
     setupEventListeners();
@@ -44,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inputExpiry.value = getFormattedDate(new Date());
 });
 
-// --- Unit Management ---
+// --- Unit Management (Synced with Google Sheets & LocalStorage) ---
 
 function getUnits() {
     try {
@@ -60,11 +62,11 @@ function getUnits() {
 }
 
 function saveUnits(unitsList) {
+    units = unitsList;
     localStorage.setItem('tooyenkung_units', JSON.stringify(unitsList));
 }
 
 function populateUnitSelect(selectedVal) {
-    const units = getUnits();
     inputUnit.innerHTML = '';
     
     // If selectedVal is provided and not in the list, keep it
@@ -100,7 +102,6 @@ function openUnitsModal() {
 }
 
 function renderUnitsList() {
-    const units = getUnits();
     unitsListContainer.innerHTML = '';
     
     if (units.length === 0) {
@@ -126,51 +127,82 @@ function renderUnitsList() {
     });
 }
 
-function addNewUnit() {
+async function addNewUnit() {
     const name = newUnitInput.value.trim();
     if (!name) return;
     
-    const units = getUnits();
     if (units.includes(name)) {
         showToast("หน่วยนี้มีอยู่แล้ว");
         return;
     }
     
+    // 1. Optimistic local update
     units.push(name);
     saveUnits(units);
     newUnitInput.value = '';
     renderUnitsList();
     populateUnitSelect(name);
     showToast(`เพิ่มหน่วย "${name}" เรียบร้อย`);
+    
+    // 2. Sync to Google Sheets
+    try {
+        await apiRequest({
+            action: 'add_unit',
+            unit: name
+        });
+    } catch (err) {
+        console.error("Error syncing unit to Google Sheets:", err);
+    }
 }
 
-function editUnitName(oldName) {
+async function editUnitName(oldName) {
     const newName = prompt(`แก้ไขชื่อหน่วย "${oldName}" เป็น:`, oldName);
     if (!newName || !newName.trim() || newName.trim() === oldName) return;
     
     const trimmed = newName.trim();
-    let units = getUnits();
     if (units.includes(trimmed)) {
         showToast("มีหน่วยนี้อยู่แล้ว");
         return;
     }
     
-    units = units.map(u => u === oldName ? trimmed : u);
-    saveUnits(units);
+    // 1. Optimistic update
+    const updatedUnits = units.map(u => u === oldName ? trimmed : u);
+    saveUnits(updatedUnits);
     renderUnitsList();
     populateUnitSelect(trimmed);
     showToast(`เปลี่ยนชื่อหน่วยเป็น "${trimmed}" แล้ว`);
+    
+    // 2. Sync to Google Sheets
+    try {
+        await apiRequest({
+            action: 'update_unit',
+            oldUnit: oldName,
+            newUnit: trimmed
+        });
+    } catch (err) {
+        console.error("Error updating unit on Google Sheets:", err);
+    }
 }
 
-function deleteUnitName(name) {
+async function deleteUnitName(name) {
     if (!confirm(`ต้องการลบหน่วย "${name}" ใช่หรือไม่?`)) return;
     
-    let units = getUnits();
-    units = units.filter(u => u !== name);
-    saveUnits(units);
+    // 1. Optimistic update
+    const updatedUnits = units.filter(u => u !== name);
+    saveUnits(updatedUnits);
     renderUnitsList();
     populateUnitSelect();
     showToast(`ลบหน่วย "${name}" แล้ว`);
+    
+    // 2. Sync to Google Sheets
+    try {
+        await apiRequest({
+            action: 'delete_unit',
+            unit: name
+        });
+    } catch (err) {
+        console.error("Error deleting unit on Google Sheets:", err);
+    }
 }
 
 // --- API Calls ---
@@ -181,11 +213,24 @@ async function fetchItems() {
         const response = await fetch(API_URL);
         const data = await response.json();
         
+        let rawInventory = [];
+        
+        // Support both old array format and new { inventory, units } structure
+        if (Array.isArray(data)) {
+            rawInventory = data;
+        } else if (data && typeof data === 'object') {
+            rawInventory = data.inventory || [];
+            if (Array.isArray(data.units) && data.units.length > 0) {
+                saveUnits(data.units);
+                populateUnitSelect(inputUnit.value);
+            }
+        }
+        
         // Filter out Depleted, calculate days left, and sort
         const now = new Date();
         now.setHours(0,0,0,0);
         
-        inventory = data
+        inventory = rawInventory
             .filter(item => item.Status !== 'Depleted')
             .map(item => {
                 const expiryDate = new Date(item.Expiry_Date);
