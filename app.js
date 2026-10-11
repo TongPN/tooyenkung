@@ -279,13 +279,28 @@ function populateUnitSelect(selectedVal) {
     }
 }
 
+// --- Modal Management (Locks Background Scrolling & Prevents Left-Right Panning) ---
+
+function showModal(modalElem) {
+    if (!modalElem) return;
+    modalElem.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+}
+
+function hideModal(modalElem) {
+    if (!modalElem) return;
+    modalElem.classList.add('hidden');
+    const hasOpenModal = [itemModal, consumeModal, unitsModal].some(m => m && !m.classList.contains('hidden'));
+    if (!hasOpenModal) {
+        document.body.classList.remove('modal-open');
+    }
+}
+
 function openUnitsModal() {
     renderUnitsList();
     if (newUnitInput) newUnitInput.value = '';
-    if (unitsModal) {
-        unitsModal.classList.remove('hidden');
-        setTimeout(() => newUnitInput && newUnitInput.focus(), 150);
-    }
+    showModal(unitsModal);
+    setTimeout(() => newUnitInput && newUnitInput.focus(), 150);
 }
 
 function renderUnitsList() {
@@ -665,15 +680,13 @@ function openConsumeModal(id) {
 
     renderConsumePresets(item);
 
-    if (consumeModal) {
-        consumeModal.classList.remove('hidden');
-        setTimeout(() => {
-            if (consumeAmountInput) {
-                consumeAmountInput.focus();
-                consumeAmountInput.select();
-            }
-        }, 150);
-    }
+    showModal(consumeModal);
+    setTimeout(() => {
+        if (consumeAmountInput) {
+            consumeAmountInput.focus();
+            consumeAmountInput.select();
+        }
+    }, 150);
 }
 
 function renderConsumePresets(item) {
@@ -861,7 +874,7 @@ function editItem(id) {
     }
     
     selectCategoryChip(item.Category);
-    if (itemModal) itemModal.classList.remove('hidden');
+    showModal(itemModal);
 }
 
 // --- Event Listeners ---
@@ -883,19 +896,19 @@ function setupEventListeners() {
             resetForm();
             if (modalTitle) modalTitle.textContent = "Add to Fridge";
             populateUnitSelect();
-            if (itemModal) itemModal.classList.remove('hidden');
+            showModal(itemModal);
         });
     }
     
     if (closeModalBtn) {
         closeModalBtn.addEventListener('click', () => {
-            if (itemModal) itemModal.classList.add('hidden');
+            hideModal(itemModal);
         });
     }
 
     if (closeConsumeModalBtn) {
         closeConsumeModalBtn.addEventListener('click', () => {
-            if (consumeModal) consumeModal.classList.add('hidden');
+            hideModal(consumeModal);
             currentConsumeItem = null;
         });
     }
@@ -930,7 +943,7 @@ function setupEventListeners() {
                 ? `หยิบใช้ ${amount} ${currentConsumeItem.Unit} (${note})` 
                 : `หยิบใช้ ${amount} ${currentConsumeItem.Unit}`;
 
-            if (consumeModal) consumeModal.classList.add('hidden');
+            hideModal(consumeModal);
             executeConsumption(currentConsumeItem, amount, noteText);
             currentConsumeItem = null;
         });
@@ -945,9 +958,20 @@ function setupEventListeners() {
     
     if (closeUnitsModalBtn) {
         closeUnitsModalBtn.addEventListener('click', () => {
-            if (unitsModal) unitsModal.classList.add('hidden');
+            hideModal(unitsModal);
         });
     }
+
+    // Backdrop click to close modals
+    [itemModal, consumeModal, unitsModal].forEach(modal => {
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    hideModal(modal);
+                }
+            });
+        }
+    });
     
     if (addNewUnitBtn) {
         addNewUnitBtn.addEventListener('click', () => {
@@ -1042,7 +1066,7 @@ function setupEventListeners() {
                     showToast("บันทึกเข้าตู้เย็นแล้ว!");
                 }
                 
-                if (itemModal) itemModal.classList.add('hidden');
+                hideModal(itemModal);
             } catch (error) {
                 console.error("Error saving to Firestore:", error);
                 showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");

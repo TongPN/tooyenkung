@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>TooYenKung - Fridge Inventory</title>
     
     <!-- Tailwind CSS -->
@@ -16,10 +16,34 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
     <style>
-        /* Mobile-friendly resets */
+        /* Mobile-friendly resets & Strict Horizontal Lock */
+        html, body {
+            overflow-x: hidden !important;
+            width: 100% !important;
+            max-width: 100vw !important;
+            position: relative;
+            overscroll-behavior-x: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        
         body {
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: none;
+        }
+        
+        /* Prevent background scroll & drag when modal is open */
+        body.modal-open {
+            overflow: hidden !important;
+            touch-action: none;
+        }
+
+        /* Modal bottom sheet styles - Locked horizontally */
+        .modal-sheet {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
         }
         
         /* Hide scrollbar for category chips but allow scroll */
@@ -31,16 +55,25 @@
             scrollbar-width: none;
         }
         
+        /* Category horizontal chips scroll containment */
+        .chips-scroll {
+            touch-action: pan-x;
+            overscroll-behavior-x: contain;
+            overscroll-behavior-y: none;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+        }
+
         /* Touch target minimum sizes */
         button, .chip {
             min-height: 44px;
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans pb-24">
+<body class="bg-gray-50 text-gray-800 font-sans pb-24 overflow-x-hidden w-full max-w-full">
 
     <!-- Family PIN Lock Screen (Shown only if not authorized) -->
-    <div id="pinLockScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div id="pinLockScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center hidden w-full max-w-full h-full overflow-hidden">
         <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-4">
             <i class="fa-solid fa-lock"></i>
         </div>
@@ -143,8 +176,8 @@
     </button>
 
     <!-- ================= ADD / EDIT ITEM MODAL ================= -->
-    <div id="itemModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 backdrop-blur-xs">
-        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl pb-6">
+    <div id="itemModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center items-center sm:p-4 backdrop-blur-xs w-full max-w-full h-full overflow-hidden">
+        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden shadow-2xl pb-6 min-w-0 modal-sheet">
             <div class="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                 <h2 id="modalTitle" class="text-xl font-bold text-gray-800">Add to Fridge</h2>
                 <button id="closeModalBtn" class="w-10 h-10 flex justify-center items-center text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200">
@@ -152,36 +185,36 @@
                 </button>
             </div>
             
-            <form id="itemForm" class="p-4 sm:p-5 space-y-4">
+            <form id="itemForm" class="p-4 sm:p-5 space-y-4 w-full max-w-full min-w-0 overflow-x-hidden">
                 <input type="hidden" id="itemId">
                 
                 <!-- Name -->
-                <div>
+                <div class="w-full">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Item Name <span class="text-red-500">*</span></label>
                     <input type="text" id="itemName" required placeholder="e.g., หมูสันนอก" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base">
                 </div>
                 
                 <!-- Category -->
-                <div>
+                <div class="w-full max-w-full overflow-hidden">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                    <div class="flex overflow-x-auto no-scrollbar space-x-2 pb-1" id="categoryContainer">
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="เนื้อสัตว์">เนื้อสัตว์</button>
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="ผัก/ผลไม้">ผัก/ผลไม้</button>
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="ไข่/นม">ไข่/นม</button>
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="เครื่องปรุง">เครื่องปรุง</button>
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="อาหารสำเร็จ">อาหารสำเร็จ</button>
-                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700" data-val="อื่นๆ">อื่นๆ</button>
+                    <div class="flex overflow-x-auto no-scrollbar space-x-2 pb-1 chips-scroll w-full max-w-full" id="categoryContainer">
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="เนื้อสัตว์">เนื้อสัตว์</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="ผัก/ผลไม้">ผัก/ผลไม้</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="ไข่/นม">ไข่/นม</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="เครื่องปรุง">เครื่องปรุง</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="อาหารสำเร็จ">อาหารสำเร็จ</button>
+                        <button type="button" class="chip category-chip px-4 py-2 bg-gray-100 border border-gray-200 rounded-full whitespace-nowrap text-gray-700 flex-shrink-0" data-val="อื่นๆ">อื่นๆ</button>
                     </div>
                     <input type="hidden" id="itemCategory" value="">
                 </div>
                 
                 <!-- Quantity & Unit -->
-                <div class="flex space-x-3">
-                    <div class="flex-1">
+                <div class="flex space-x-3 w-full">
+                    <div class="flex-1 min-w-0">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Qty</label>
                         <input type="number" id="itemQty" step="any" min="0.01" value="1" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base text-center">
                     </div>
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0">
                         <div class="flex justify-between items-center mb-1">
                             <label class="block text-sm font-semibold text-gray-700">Unit</label>
                             <button type="button" id="manageUnitsBtn" class="text-xs text-blue-600 font-semibold hover:underline">
@@ -195,7 +228,7 @@
                 </div>
                 
                 <!-- Dates Section: Purchase Date & Expiry Date -->
-                <div class="space-y-4 pt-1">
+                <div class="space-y-4 pt-1 w-full">
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">
                             <i class="fa-solid fa-cart-shopping mr-1.5 text-blue-600"></i>วันที่ซื้อ / นำเข้า <span class="text-red-500">*</span>
@@ -229,8 +262,8 @@
     </div>
 
     <!-- ================= CONSUME / CUSTOM AMOUNT MODAL ================= -->
-    <div id="consumeModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 backdrop-blur-xs">
-        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl pb-6">
+    <div id="consumeModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center items-center sm:p-4 backdrop-blur-xs w-full max-w-full h-full overflow-hidden">
+        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full max-w-full sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden shadow-2xl pb-6 min-w-0 modal-sheet">
             <div class="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                 <div>
                     <h2 class="text-lg font-bold text-gray-800" id="consumeItemTitle">บันทึกการหยิบใช้</h2>
@@ -241,11 +274,11 @@
                 </button>
             </div>
             
-            <form id="consumeForm" class="p-4 sm:p-5 space-y-4">
+            <form id="consumeForm" class="p-4 sm:p-5 space-y-4 w-full max-w-full min-w-0 overflow-x-hidden">
                 <input type="hidden" id="consumeItemId">
 
                 <!-- Amount to use input -->
-                <div>
+                <div class="w-full">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">
                         จำนวนที่หยิบใช้ (<span id="consumeUnitLabel">หน่วย</span>)
                     </label>
@@ -256,7 +289,7 @@
                 </div>
 
                 <!-- Quick Presets Container -->
-                <div>
+                <div class="w-full">
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">ปุ่มลัดเลือกปริมาณ (Presets)</label>
                     <div id="consumePresetsContainer" class="flex flex-wrap gap-2">
                         <!-- Injected dynamically based on unit (e.g. 50g, 100g, 200g, 50%, all) -->
@@ -264,13 +297,13 @@
                 </div>
 
                 <!-- Preview Remaining -->
-                <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center text-xs">
+                <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 flex justify-between items-center text-xs w-full">
                     <span class="text-gray-500">หลังใช้จะเหลือในตู้:</span>
                     <span id="consumePreviewRemaining" class="font-bold text-gray-800 text-sm">-</span>
                 </div>
 
                 <!-- Optional Note -->
-                <div>
+                <div class="w-full">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">
                         บันทึกการนำไปทำอาหาร (ไม่บังคับ)
                     </label>
@@ -287,8 +320,8 @@
     </div>
 
     <!-- ================= MANAGE UNITS MODAL ================= -->
-    <div id="unitsModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center sm:items-center sm:p-4 backdrop-blur-xs">
-        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl pb-6">
+    <div id="unitsModal" class="fixed inset-0 bg-black/60 z-30 hidden flex flex-col justify-end sm:justify-center items-center sm:p-4 backdrop-blur-xs w-full max-w-full h-full overflow-hidden">
+        <div class="bg-white rounded-t-2xl sm:rounded-3xl w-full max-w-full sm:max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden shadow-2xl pb-6 min-w-0 modal-sheet">
             <div class="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
                 <h2 class="text-lg font-bold text-gray-800">จัดการหน่วยนับ (Units)</h2>
                 <button id="closeUnitsModalBtn" class="w-10 h-10 flex justify-center items-center text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200">
@@ -296,7 +329,7 @@
                 </button>
             </div>
             
-            <div class="p-4 sm:p-5 space-y-5">
+            <div class="p-4 sm:p-5 space-y-5 w-full max-w-full min-w-0 overflow-x-hidden">
                 <!-- Add New Unit -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">เพิ่มหน่วยนับใหม่</label>
@@ -325,6 +358,6 @@
     </div>
 
     <!-- Cache-busting script version to ensure latest JS is always fetched -->
-    <script src="app.js?v=2.3"></script>
+    <script src="app.js?v=2.4"></script>
 </body>
 </html>
