@@ -4,7 +4,7 @@
 **Target Platform:** Mobile-First Web App & Progressive Web App (PWA - Add to Home Screen)  
 **Database & Backend:** Firebase Cloud Firestore (Serverless NoSQL)  
 **Hosting & Deployment:** GitHub Pages (Automated Git-based Deployment)  
-**Current Version:** Production v2.9  
+**Current Version:** Production v2.10  
 **Last Updated:** October 2026  
 
 ---
@@ -330,3 +330,4 @@
 | In-App True Reload Button | ✅ สมบูรณ์ | v2.6 | ปุ่ม Reload หน้าเว็บจริงสำหรับ iOS PWA |
 | AI Chef (Thai & Japanese Recipes) | ✅ สมบูรณ์ | v2.8 | แนะนำเมนูไทย-ญี่ปุ่น คำนวณของที่ต้องซื้อเพิ่มพร้อมปริมาณชัดเจน |
 | Usage Date Selection (เลือกวันที่หยิบใช้) | ✅ สมบูรณ์ | v2.9 | บันทึกการหยิบใช้ย้อนหลังได้ ค่าเริ่มต้นเป็นวันนี้ พร้อมปุ่มลัดวันนี้/เมื่อวาน |
+| iOS Safari Date Input Overflow Fix | ✅ สมบูรณ์ | v2.10 | ปรับ box-sizing และ appearance แก้ปัญหากล่องวันที่ล้นขอบจอขวาบน iPhone |
