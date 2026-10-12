@@ -110,6 +110,9 @@ const consumeUnitSuffix = document.getElementById('consumeUnitSuffix');
 const consumeAmountInput = document.getElementById('consumeAmountInput');
 const consumePresetsContainer = document.getElementById('consumePresetsContainer');
 const consumePreviewRemaining = document.getElementById('consumePreviewRemaining');
+const consumeDateInput = document.getElementById('consumeDateInput');
+const consumeDateTodayBtn = document.getElementById('consumeDateTodayBtn');
+const consumeDateYesterdayBtn = document.getElementById('consumeDateYesterdayBtn');
 const consumeNoteInput = document.getElementById('consumeNoteInput');
 
 // AI Chef & Key Modal Elements
@@ -731,6 +734,8 @@ function openConsumeModal(id) {
 
     if (consumeAmountInput) consumeAmountInput.value = defaultAmount;
     if (consumeNoteInput) consumeNoteInput.value = '';
+    const todayStr = getFormattedDate(new Date());
+    if (consumeDateInput) consumeDateInput.value = todayStr;
     updateConsumePreview(defaultAmount);
 
     renderConsumePresets(item);
@@ -824,7 +829,7 @@ function updateConsumePreview(enteredAmount) {
     }
 }
 
-async function executeConsumption(item, amount, noteText) {
+async function executeConsumption(item, amount, noteText, consumeDateVal = null) {
     const currentQty = parseFloat(item.Remaining_Qty) || 0;
     const newQty = Math.round((currentQty - amount) * 100) / 100;
     const currentUsed = parseFloat(item.usedCount) || 0;
@@ -834,16 +839,27 @@ async function executeConsumption(item, amount, noteText) {
         if (!confirm(`คุณหยิบใช้ "${item.Item_Name}" จนหมดตู้แล้วใช่หรือไม่?\nต้องการตัดออกจากตู้เย็นเลยไหม?`)) {
             return;
         }
-        markDepleted(item.ID);
+        markDepleted(item.ID, consumeDateVal);
         return;
     }
 
-    const now = new Date();
+    let logDate = new Date();
+    if (consumeDateVal) {
+        const todayStr = getFormattedDate(new Date());
+        if (consumeDateVal === todayStr) {
+            logDate = new Date();
+        } else {
+            const [y, m, d] = consumeDateVal.split('-').map(Number);
+            const now = new Date();
+            logDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+        }
+    }
+
     const logId = 'h_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const historyEntry = {
         id: logId,
-        date: now.toISOString(),
-        displayDate: formatDisplayTime(now),
+        date: logDate.toISOString(),
+        displayDate: formatDisplayTime(logDate),
         action: 'consume',
         amount: amount,
         remaining: newQty,
@@ -874,7 +890,7 @@ async function executeConsumption(item, amount, noteText) {
 
 // --- Interactions ---
 
-async function markDepleted(id) {
+async function markDepleted(id, depleteDateVal = null) {
     if (!confirm("ยืนยันว่าใช้ของชิ้นนี้หมดแล้วใช่หรือไม่?")) return;
     
     const backupItem = inventory.find(i => i.ID === id);
@@ -883,12 +899,23 @@ async function markDepleted(id) {
     showToast("นำออกจากตู้เย็นแล้ว");
     
     try {
-        const now = new Date();
+        let logDate = new Date();
+        if (depleteDateVal) {
+            const todayStr = getFormattedDate(new Date());
+            if (depleteDateVal === todayStr) {
+                logDate = new Date();
+            } else {
+                const [y, m, d] = depleteDateVal.split('-').map(Number);
+                const now = new Date();
+                logDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
+            }
+        }
+
         const logId = 'h_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
         const depleteEntry = {
             id: logId,
-            date: now.toISOString(),
-            displayDate: formatDisplayTime(now),
+            date: logDate.toISOString(),
+            displayDate: formatDisplayTime(logDate),
             action: 'deplete',
             note: 'ใช้หมดแล้ว / นำออกจากตู้เย็น'
         };
@@ -997,10 +1024,26 @@ function setupEventListeners() {
             const noteText = note 
                 ? `หยิบใช้ ${amount} ${currentConsumeItem.Unit} (${note})` 
                 : `หยิบใช้ ${amount} ${currentConsumeItem.Unit}`;
+            const consumeDateVal = consumeDateInput && consumeDateInput.value ? consumeDateInput.value : getFormattedDate(new Date());
 
             hideModal(consumeModal);
-            executeConsumption(currentConsumeItem, amount, noteText);
+            executeConsumption(currentConsumeItem, amount, noteText, consumeDateVal);
             currentConsumeItem = null;
+        });
+    }
+
+    // Consume date quick presets (วันนี้ / เมื่อวาน)
+    if (consumeDateTodayBtn && consumeDateInput) {
+        consumeDateTodayBtn.addEventListener('click', () => {
+            consumeDateInput.value = getFormattedDate(new Date());
+        });
+    }
+
+    if (consumeDateYesterdayBtn && consumeDateInput) {
+        consumeDateYesterdayBtn.addEventListener('click', () => {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            consumeDateInput.value = getFormattedDate(yesterday);
         });
     }
     

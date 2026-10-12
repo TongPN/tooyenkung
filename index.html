@@ -323,6 +323,21 @@
                     <span id="consumePreviewRemaining" class="font-bold text-gray-800 text-sm">-</span>
                 </div>
 
+                <!-- Usage Date (วันที่หยิบใช้) -->
+                <div class="w-full">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-sm font-semibold text-gray-700">
+                            <i class="fa-solid fa-calendar-day mr-1.5 text-blue-600"></i>วันที่หยิบใช้ <span class="text-red-500">*</span>
+                        </label>
+                        <div class="flex space-x-1.5">
+                            <button type="button" id="consumeDateTodayBtn" class="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-100 active:scale-95 transition-all">วันนี้</button>
+                            <button type="button" id="consumeDateYesterdayBtn" class="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-200 active:scale-95 transition-all">เมื่อวาน</button>
+                        </div>
+                    </div>
+                    <input type="date" id="consumeDateInput" required class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base bg-white">
+                    <p class="text-xs text-gray-400 mt-1">ค่าเริ่มต้นคือวันนี้ (เปลี่ยนได้หากบันทึกย้อนหลัง)</p>
+                </div>
+
                 <!-- Optional Note -->
                 <div class="w-full">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">
@@ -469,6 +484,6 @@
     </div>
 
     <!-- Cache-busting script version to ensure latest JS is always fetched -->
-    <script src="app.js?v=2.8"></script>
+    <script src="app.js?v=2.9"></script>
 </body>
 </html>

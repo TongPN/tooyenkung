@@ -4,7 +4,7 @@
 **Target Platform:** Mobile-First Web App & Progressive Web App (PWA - Add to Home Screen)  
 **Database & Backend:** Firebase Cloud Firestore (Serverless NoSQL)  
 **Hosting & Deployment:** GitHub Pages (Automated Git-based Deployment)  
-**Current Version:** Production v2.8  
+**Current Version:** Production v2.9  
 **Last Updated:** October 2026  
 
 ---
@@ -166,6 +166,11 @@
 * **ปุ่มลัดเลือกปริมาณ (Smart Presets):**
   * หน่วยกรัม/มล.: มีปุ่มลัด `50`, `100`, `200`, `ครึ่งหนึ่ง`, `ทั้งหมด`
   * หน่วยชิ้น/นับชิ้น: มีปุ่มลัด `1`, `2`, `3`, `ครึ่งหนึ่ง`, `ทั้งหมด`
+* **วันที่หยิบใช้ (Usage Date Picker - v2.9):**
+  * มีช่องเลือกวันที่หยิบใช้จริง เพื่อรองรับกรณีทำอาหารแล้วลืมบันทึกในวันจริง แล้วมาบันทึกย้อนหลังในวันถัดไป
+  * **ค่าเริ่มต้น (Default):** เป็นวันที่ปัจจุบันที่เปิดใช้งานแอป (`getFormattedDate(new Date())`)
+  * **ปุ่มลัดเลือกวัน (Quick Presets):** มีปุ่มลัด **"วันนี้"** และ **"เมื่อวาน"** แตะเปลี่ยนวันที่ได้ในคลิกเดียว
+  * ประวัติการใช้จะถูกจัดเก็บตามวันที่หยิบใช้จริง และนำไปจัดเรียง Timeline ในแท็บประวัติอย่างถูกต้องตามลำดับเวลา
 * **ช่องโน้ตการทำอาหาร (Optional Note):** ใส่บันทึก เช่น *"ทำผัดกะเพรา"*, *"แกงจืด"*
 * **ปุ่ม "ยืนยันการใช้":** บันทึกการตัดสต็อก อัปเดต Firestore และบันทึกประวัติทันที
 
@@ -324,3 +329,4 @@
 | Family PIN Security Decoupling | ✅ สมบูรณ์ | v2.5 / v2.7 | รหัสผ่าน Cloud-based ใน Firestore ไร้ Secret ใน Public Git |
 | In-App True Reload Button | ✅ สมบูรณ์ | v2.6 | ปุ่ม Reload หน้าเว็บจริงสำหรับ iOS PWA |
 | AI Chef (Thai & Japanese Recipes) | ✅ สมบูรณ์ | v2.8 | แนะนำเมนูไทย-ญี่ปุ่น คำนวณของที่ต้องซื้อเพิ่มพร้อมปริมาณชัดเจน |
+| Usage Date Selection (เลือกวันที่หยิบใช้) | ✅ สมบูรณ์ | v2.9 | บันทึกการหยิบใช้ย้อนหลังได้ ค่าเริ่มต้นเป็นวันนี้ พร้อมปุ่มลัดวันนี้/เมื่อวาน |
